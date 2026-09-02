@@ -36,6 +36,18 @@ au bon endroit.
 
 ---
 
+## Telechargement direct
+
+Pour Claude Desktop et claude.ai, qui attendent un zip :
+
+- [`duo-claude-codex-claude.zip`](duo-claude-codex-claude.zip)
+- [`duo-claude-codex-codex.zip`](duo-claude-codex-codex.zip)
+
+Le zip contient le dossier avec son `SKILL.md` a la racine, c est la forme
+attendue par l import.
+
+---
+
 ## Installation
 
 **Claude Code** : poser le dossier dans `<projet>/.claude/skills/duo-claude-codex/`
