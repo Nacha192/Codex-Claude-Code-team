@@ -124,6 +124,29 @@ Ces deux liens telechargent directement, sans passer par une page
 intermediaire. Le zip contient le dossier avec son `SKILL.md` a la racine,
 c est la forme attendue par l import.
 
+**Quoi en faire, une fois telecharges.** Chaque zip contient un dossier
+`duo-claude-codex`. Les deux portent le meme nom, c est normal, c est le nom du
+skill : ils ne se marchent pas dessus parce qu ils vont a deux endroits
+differents.
+
+1. Decompresser `duo-claude-codex-claude.zip`, poser le dossier obtenu dans
+   `votre-projet/.claude/skills/`
+2. Decompresser `duo-claude-codex-codex.zip`, poser le dossier obtenu dans
+   `votre-projet/.agents/skills/`
+
+Resultat attendu :
+
+```
+votre-projet/
+  .claude/skills/duo-claude-codex/SKILL.md
+  .agents/skills/duo-claude-codex/SKILL.md
+```
+
+C est tout. Rien a lancer, rien a redemarrer, rien a declarer.
+
+**Ne decompressez pas les deux au meme endroit** : meme nom de dossier, le
+second ecraserait le premier.
+
 Sinon, le bouton vert **Code** en haut de la page, puis **Download ZIP**,
 telecharge le depot entier : les deux versions decompressees, prêtes a copier
 au bon endroit.
