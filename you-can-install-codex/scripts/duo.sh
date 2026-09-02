@@ -178,6 +178,27 @@ ${intitule:-(une phrase, pas un paragraphe)}
 EOF
     echo "cree : $MISSION"
   fi
+  # Le canal se protege lui-meme. Un .gitignore DANS .duo/ s applique a ce
+  # dossier quoi qu il arrive, sans dependre de quelqu un qui aurait lu la doc
+  # et pense a l ajouter. Les logs sont la sortie brute des runs : si l autre
+  # agent a ouvert un .env en explorant, son contenu est dedans en clair.
+  if [ ! -f "$DUO/.gitignore" ]; then
+    cat > "$DUO/.gitignore" <<'GITEOF'
+# Ecrit par duo.sh init. Ne rien committer d ephemere ni de verbeux.
+# Les .log sont la sortie brute des runs : ils peuvent contenir le contenu
+# de fichiers que l autre agent a ouverts. Ils ne sortent jamais d ici.
+*.log
+.numeros/
+fil.html
+echanges/
+claims/
+# On GARDE MISSION.md et etat.json : ils expliquent ce qui a ete decide.
+!MISSION.md
+!etat.json
+GITEOF
+    echo "cree : $DUO/.gitignore"
+  fi
+
   [ -f "$ETAT" ] || "$PY" -c "import json,sys;json.dump({'mission':sys.argv[1],'pilote':'','session_codex':'','dernier_tour':'0000','statut':'ouverte'},open(sys.argv[2],'w',encoding='utf-8'),ensure_ascii=False,indent=2)" "${intitule:-sans titre}" "$ETAT"
   echo "canal pret dans $DUO"
 }

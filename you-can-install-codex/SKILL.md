@@ -284,9 +284,20 @@ depot ou la mission tourne :
 
 ```gitignore
 .duo/echanges/
+.duo/claims/
 .duo/fil.html
-.duo/.dernier-run.log
+.duo/*.log
+.duo/.numeros/
 ```
+
+**`.duo/*.log` est la ligne qui compte, et elle a failli manquer.** Ces fichiers
+sont la sortie brute des runs de Codex : tout ce qu il a lu, liste et affiche
+pendant qu il travaillait. Sur la mission de demonstration, un seul faisait
+72 Ko. Si le depot contient un `.env`, une configuration ou une cle et qu il l a
+ouvert en explorant, **le contenu est dans ce log en clair**. Un motif trop
+precis a deja rate le coup une fois : la ligne disait `.duo/.dernier-run.log`,
+les fichiers ont ete renommes en `.run-NNNN.log`, et ils sont redevenus
+committables sans que personne le voie. **Une etoile, pas un nom.**
 
 et on **garde** `MISSION.md` et `etat.json`, qui expliquent ce qui a ete decide.
 
