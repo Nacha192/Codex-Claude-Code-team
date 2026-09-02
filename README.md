@@ -9,6 +9,35 @@ chacun fait ce que l autre ne peut pas, et ils valent moins que zero quand ils
 se repassent la meme tache en se felicitant. Ce depot sert a obtenir le premier
 cas et a rendre le second difficile.
 
+## Installation, en 30 secondes
+
+**Telechargez les deux.** Un skill pour Claude Code, un pour Codex. Les deux
+sont necessaires : si un seul des agents l a, il suit un protocole que l autre
+ne connait pas et rien ne se passe.
+
+| | Telechargement | Ou le poser |
+|---|---|---|
+| Claude Code | **[le zip](https://github.com/Nacha192/Codex-Claude-Code-communication-team-/raw/main/duo-claude-codex-claude.zip)** | `votre-projet/.claude/skills/` |
+| Codex | **[le zip](https://github.com/Nacha192/Codex-Claude-Code-communication-team-/raw/main/duo-claude-codex-codex.zip)** | `votre-projet/.agents/skills/` |
+
+Decompressez, posez le dossier `duo-claude-codex` obtenu a l emplacement indique.
+Vous devez arriver a ceci :
+
+```
+votre-projet/
+  .claude/skills/duo-claude-codex/SKILL.md
+  .agents/skills/duo-claude-codex/SKILL.md
+```
+
+**C est tout.** Rien a installer, rien a lancer, rien a redemarrer. Les deux
+agents doivent travailler sur la meme machine et dans le meme depot : le canal
+est un dossier de fichiers, pas un service en ligne.
+
+Ensuite, on le demande : « utilise le skill duo-claude-codex pour cette
+mission ». Il ne se declenche pas tout seul, c est voulu.
+
+---
+
 ---
 
 ## Demarrage rapide
