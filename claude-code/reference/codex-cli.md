@@ -111,7 +111,7 @@ Lus dans `config.toml` :
 
 ## Ce qu il fait mieux, honnetement
 
-Constate sur la refonte des creatives un projet de demonstration, pas suppose :
+Constate sur une refonte de creatives publicitaires reelle, pas suppose :
 
 - **Il genere des images utilisables, et il sait pourquoi elles marchent.**
   Interroge sur ce qu il ajoutait pour casser le rendu IA, il a repondu qu il ne
