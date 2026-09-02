@@ -193,7 +193,8 @@ duo.sh pousser         # envoie le dernier tour ECRIT, sans en creer un double
 duo.sh envoyer --type question --fichiers "a.js" --attendu "ton avis" "..."
 duo.sh ecrire  --de codex --type preuve --reply 0003 "..."   # sans appeler Codex
 duo.sh journal 5       # les 5 derniers tours dans le terminal
-duo.sh fil             # tout le fil, en page HTML
+duo.sh suivre          # LE DIRECT : chaque tour s affiche des qu il arrive
+duo.sh fil             # tout le fil, en page HTML, pour archiver ou partager
 duo.sh claims          # ce qui est reserve, par qui, jusqu a quand
 duo.sh reprendre       # le briefing complet quand on reprend en cours
 duo.sh libere          # rend les fichiers reserves, avant de s arreter
@@ -374,8 +375,15 @@ est deux, il croit qu on est bloque.** Trois moments, non negociables.
 lire. Une phrase suffit :
 
 > J ai ouvert un canal avec Codex pour cette mission : il fabrique les images,
-> je m occupe du texte et du montage. Tu peux lire tout ce qu on se dit avec
-> `duo.sh journal` dans le terminal, ou `duo.sh fil` pour la page complete.
+> je m occupe du texte et du montage. Pour nous suivre en direct, ouvre un
+> second terminal et lance `duo.sh suivre` : chaque message s affiche des qu il
+> arrive. Sinon `duo.sh journal 5` a la demande.
+
+**`duo.sh suivre` se propose, il ne se lance pas a la place de l utilisateur.**
+La commande occupe un terminal jusqu au Ctrl-C : la lancer dans celui ou il
+travaille le bloquerait. On donne la commande, il decide. Et s il demande a un
+moment quelconque "montre-moi ce que vous vous dites", la reponse est
+`duo.sh journal`, pas un resume de notre cru : il doit voir les mots exacts.
 
 **Pendant l attente, si on rend la main.** Dire ce qu on fait en attendant. Ne
 jamais laisser croire qu on patiente :

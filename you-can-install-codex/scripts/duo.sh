@@ -211,7 +211,9 @@ cmd_envoyer() {
   [ "$SANS_TOUR" = "0" ] && envoye=$(ecrire_tour "$RESTE")
   local sid; sid=$(etat_lire session_codex)
   TYPE="reponse"; DE="codex"; A="claude"; FICHIERS=""; ATTENDU=""
-  local n; n=$(prochain_numero)
+  # Le numero de la reponse se RESERVE lui aussi : sinon la course revenait par
+  # la porte de derriere, la moitie corrigee seulement.
+  local n; n=$(reserver_numero) || return 1
   local sortie="$ECHANGES/$n-codex-reponse.md"
 
   # `codex exec resume --help` ne declare ni -C ni -s : les passer echoue.
@@ -230,7 +232,10 @@ cmd_envoyer() {
   # L ETIQUETTE, jamais sur "le premier UUID du log" : un UUID peut apparaitre
   # dans la reponse elle-meme, et le format de sortie n est pas un contrat.
   # Dependance testee sur codex-cli 0.152.0. Si l ancre disparait, on le dit.
-  if [ -z "$sid" ]; then
+  # Uniquement si le run a abouti : sinon on avertissait d un session id
+  # manquant alors que la vraie cause etait plus bas, et on brouillait le
+  # message utile.
+  if [ -z "$sid" ] && [ $code -eq 0 ]; then
     local trouve
     trouve=$(grep -o 'session id:.*' "$log" | head -1 \
              | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
@@ -243,6 +248,15 @@ cmd_envoyer() {
 
   # Le quota est une panne temporaire, pas un bug : on le nomme pour que
   # l appelant sache qu il doit continuer seul et reprendre plus tard.
+  # Codex refuse de tourner hors d un depot git de confiance. Sans ce message,
+  # l appelant lisait "code 1" et cherchait au mauvais endroit. Constate.
+  if grep -q "Not inside a trusted directory" "$log" 2>/dev/null; then
+    echo "codex refuse ce dossier : il n est pas un depot git de confiance." >&2
+    echo "  Ouvrir la mission dans un depot git (git init suffit), ou lancer" >&2
+    echo "  codex une fois a la main dans ce dossier pour l approuver." >&2
+    rm -f "$sortie"; return 3
+  fi
+
   if grep -q "usage limit" "$log" 2>/dev/null; then
     echo "codex a atteint son quota. Reprendre plus tard, le message est archive." >&2
     rm -f "$sortie"; return 3
@@ -252,7 +266,11 @@ cmd_envoyer() {
   # et pas dans le fichier, on la recupere du log plutot que de la perdre. Bug
   # trouve au premier test reel du protocole : les images etaient produites et
   # la reponse n etait nulle part dans le fil.
-  if [ ! -s "$sortie" ] && [ -s "$log" ] && ! grep -q "usage limit" "$log"; then
+  #
+  # MAIS uniquement si le run a REUSSI. Sans cette condition, un echec etait
+  # archive dans le fil signe "de: codex", donc un message d erreur se faisait
+  # passer pour sa reponse. Trouve au test de bout en bout.
+  if [ $code -eq 0 ] && [ ! -s "$sortie" ] && [ -s "$log" ]; then
     { echo "---"; echo "n: $n"; echo "de: codex"; echo "a: claude";
       echo "type: reponse"; echo "utc: $(utc)";
       echo "note: recupere du log, -o n avait rien ecrit"; echo "---"; echo
@@ -331,6 +349,51 @@ cmd_pousser() {
   # on retire l en-tete : l autre agent lit le corps, pas nos metadonnees
   local corps; corps=$(sed '1,/^---$/d; 1,/^---$/d' "$dernier")
   cmd_envoyer --sans-tour "$corps"
+}
+
+
+# --- suivre : le fil dans le terminal, qui se met a jour tout seul --------
+# Pas une page web. Un terminal qu on laisse ouvert a cote, qui affiche chaque
+# nouveau tour des qu il arrive. La commande ne rend la main qu au Ctrl-C.
+COUL_CLAUDE=$'[38;5;179m'; COUL_CODEX=$'[38;5;74m'
+GRIS=$'[38;5;244m'; VIF=$'[1m'; RAZ=$'[0m'
+
+# Un tour, mis en forme. Utilise par journal et par suivre : une seule
+# presentation, sinon les deux divergent.
+afficher_tour() {
+  local f="$1" nom base coul qui ligne dans_entete=1
+  base=$(basename "$f" .md)
+  case "$base" in *-codex-*) coul="$COUL_CODEX"; qui=CODEX ;; *) coul="$COUL_CLAUDE"; qui=CLAUDE ;; esac
+  local n type utc
+  n=${base%%-*}
+  type=${base##*-}
+  utc=$(sed -n 's/^utc: //p' "$f" | head -1)
+  printf '%s%s  %s %s%s  %s%s%s
+' "$coul" "$VIF" "$n" "$qui" "$RAZ" "$GRIS" "$type ${utc#*T}" "$RAZ"
+  # le corps commence apres le second ---
+  # barre ASCII : l UTF-8 sortait en mojibake selon la console Windows
+  awk 'BEGIN{d=0} /^---$/{d++; next} d>=2 && (NF || vu) {vu=1; print}' "$f"     | sed "s/^/  ${coul}|${RAZ} /"
+  echo
+}
+
+cmd_suivre() {
+  local vus="" f base
+  printf '%s%s%s
+' "$VIF" "$(etat_lire mission)" "$RAZ"
+  printf '%sfil en direct. Ctrl-C pour sortir.%s
+
+' "$GRIS" "$RAZ"
+  # on affiche d abord ce qui existe deja, puis on attend la suite
+  while :; do
+    for f in "$ECHANGES"/*.md; do
+      [ -e "$f" ] || continue
+      base=$(basename "$f")
+      case "$vus" in *"|$base|"*) continue ;; esac
+      vus="$vus|$base|"
+      afficher_tour "$f"
+    done
+    sleep 2
+  done
 }
 
 # --- claims : dire ce qu on prend AVANT de le prendre ----------------------
@@ -412,22 +475,31 @@ cmd_libere() {
 }
 
 cmd_journal() {
-  local n="${1:-5}"
-  ls -1 "$ECHANGES"/*.md 2>/dev/null | tail -n "$n" | while read -r f; do
-    echo "┌─ $(basename "$f" .md)"
-    sed 's/^/│ /' "$f" | head -45
-    echo "└────────────────────────────────────────────"
+  local n="${1:-5}" f
+  ls -1 "$ECHANGES"/*.md 2>/dev/null | tail -"$n" | while read -r f; do
+    afficher_tour "$f"
   done
 }
 
 cmd_fil() {
   local html="$DUO/fil.html"
+  local SUIVI="${SUIVI:-0}"
   {
     echo '<!doctype html><meta charset="utf-8"><title>Fil Claude / Codex</title>'
+    # La page se recharge seule. Inoffensif quand on la consulte a froid :
+    # elle se recontente d afficher le meme contenu.
+    [ "$SUIVI" = "1" ] && echo '<meta http-equiv="refresh" content="2">'
     echo '<style>body{background:#0f1117;color:#e8e8e8;font:15px/1.65 ui-sans-serif,system-ui;max-width:920px;margin:0 auto;padding:40px 20px}'
     echo 'article{border-left:3px solid;padding:2px 0 2px 16px;margin:26px 0;white-space:pre-wrap}'
     echo '.claude{border-color:#c98b3a}.codex{border-color:#3aa7c9}'
-    echo 'h3{font-size:12px;letter-spacing:.1em;text-transform:uppercase;opacity:.6;margin:0 0 8px}</style>'
+    echo 'h3{font-size:12px;letter-spacing:.1em;text-transform:uppercase;opacity:.6;margin:0 0 8px}'
+    echo 'header{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid #262a36;padding-bottom:14px}'
+    echo 'header b{font-weight:600}header span{font-size:12px;opacity:.55}'
+    echo '.vide{opacity:.5;font-style:italic;margin-top:40px}</style>'
+    echo "<header><b>$(etat_lire mission)</b><span>"
+    if [ "$SUIVI" = "1" ]; then echo "en direct, recharge toutes les 2 s &middot; $(utc)"
+    else echo "instantane du $(utc) &middot; duo.sh suivre pour le direct"; fi
+    echo '</span></header>'
     for f in "$ECHANGES"/*.md; do
       [ -e "$f" ] || continue
       case "$(basename "$f")" in *-codex-*) k=codex ;; *) k=claude ;; esac
@@ -435,6 +507,7 @@ cmd_fil() {
       sed 's/&/\&amp;/g; s/</\&lt;/g' "$f"
       echo '</article>'
     done
+    [ -z "$(ls -1 "$ECHANGES" 2>/dev/null)" ] && echo '<p class="vide">Personne n a encore parle.</p>'
   } > "$DUO/fil.partiel"
   mv -f "$DUO/fil.partiel" "$html"
   echo "$html"
@@ -463,6 +536,7 @@ case "${1:-}" in
   reprendre) cmd_reprendre ;;
   journal) shift; cmd_journal "${1:-5}" ;;
   fil)     cmd_fil ;;
+  suivre)  cmd_suivre ;;
   etat)    cmd_etat ;;
   *) sed -n '2,30p' "$0" | sed 's/^# \?//'; exit 1 ;;
 esac

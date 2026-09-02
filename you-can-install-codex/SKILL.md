@@ -176,7 +176,11 @@ duo.sh ecrire --de codex --type resultat --reply 0003 --fichiers "a.png" "..."
 duo.sh pousser                      # envoie le dernier tour ecrit, sans le dupliquer
 
 duo.sh journal 5                    # les 5 derniers tours
-duo.sh fil                          # la page complete
+duo.sh suivre                       # le direct, pour l utilisateur : chaque
+                                    # tour s affiche des qu il arrive. A lui
+                                    # proposer, jamais a lancer a sa place :
+                                    # ca occupe un terminal jusqu au Ctrl-C.
+duo.sh fil                          # la page complete, pour archiver
 duo.sh etat                         # ou en est la mission
 ```
 
