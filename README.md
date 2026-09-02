@@ -1,7 +1,8 @@
-# Codex × Claude Code
+# Codex × Claude Code (communication / team)
 
-Un protocole de travail a deux entre **Codex CLI** et **Claude Code**, livre en
-deux skills : un pour chacun, meme protocole, chacun avec ses contraintes.
+**Faire travailler Codex CLI et Claude Code ensemble sur une meme mission, sans
+qu ils se marchent dessus.** Un protocole, un canal de fichiers, et deux skills :
+un pour chacun, meme regles, chacun avec ses contraintes propres.
 
 Deux agents ne valent pas mieux qu un seul par magie. Ils valent mieux quand
 chacun fait ce que l autre ne peut pas, et ils valent moins que zero quand ils
