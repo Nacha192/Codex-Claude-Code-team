@@ -297,30 +297,11 @@ cmd_envoyer() {
     fi
   fi
 
-  # Le quota est une panne temporaire, pas un bug : on le nomme pour que
-  # l appelant sache qu il doit continuer seul et reprendre plus tard.
-  # Codex refuse de tourner hors d un depot git de confiance. Sans ce message,
-  # l appelant lisait "code 1" et cherchait au mauvais endroit. Constate.
-  if grep -q "Not inside a trusted directory" "$log" 2>/dev/null; then
-    echo "codex refuse ce dossier : il n est pas un depot git de confiance." >&2
-    echo "  Ouvrir la mission dans un depot git (git init suffit), ou lancer" >&2
-    echo "  codex une fois a la main dans ce dossier pour l approuver." >&2
-    rm -f "$sortie"; return 3
-  fi
-
-  if grep -q "usage limit" "$log" 2>/dev/null; then
-    echo "codex a atteint son quota. Reprendre plus tard, le message est archive." >&2
-    rm -f "$sortie"; return 3
-  fi
-
   # -o n est pas toujours honore : quand la reponse part sur la sortie standard
   # et pas dans le fichier, on la recupere du log plutot que de la perdre. Bug
-  # trouve au premier test reel du protocole : les images etaient produites et
-  # la reponse n etait nulle part dans le fil.
-  #
-  # MAIS uniquement si le run a REUSSI. Sans cette condition, un echec etait
-  # archive dans le fil signe "de: codex", donc un message d erreur se faisait
-  # passer pour sa reponse. Trouve au test de bout en bout.
+  # trouve au premier test reel : les images etaient produites et la reponse
+  # n etait nulle part dans le fil. Uniquement si le run a REUSSI, sinon un
+  # message d erreur se faisait passer pour sa reponse.
   if [ $code -eq 0 ] && [ ! -s "$sortie" ] && [ -s "$log" ]; then
     { echo "---"; echo "n: $n"; echo "de: codex"; echo "a: claude";
       echo "type: reponse"; echo "utc: $(utc)";
@@ -328,11 +309,33 @@ cmd_envoyer() {
       cat "$log"; } > "$sortie.partiel" && mv -f "$sortie.partiel" "$sortie"
   fi
 
+  # `-o` ecrit la reponse BRUTE, sans en-tete. Le fil exige que chaque tour en
+  # porte un : sans ca, l affichage ne trouvait pas le corps et montrait un tour
+  # vide, et un lecteur humain ne savait pas qui parlait. Seul le rattrapage par
+  # le log en posait un, le chemin normal l oubliait.
+  if [ $code -eq 0 ] && [ -s "$sortie" ] && ! head -1 "$sortie" | grep -q '^---$'; then
+    { echo "---"; echo "n: $n"; echo "de: codex"; echo "a: claude";
+      echo "type: reponse"; echo "utc: $(utc)"; echo "---"; echo
+      cat "$sortie"; } > "$sortie.entete" && mv -f "$sortie.entete" "$sortie"
+  fi
+
+  # On ne cherche une cause d echec QUE si le run a echoue. La version
+  # precedente fouillait le log dans tous les cas, et Codex, en lisant duo.sh
+  # pendant son exploration, avait recopie dans sa sortie la ligne source qui
+  # contient la phrase d erreur. Le script a donc conclu a un echec, supprime
+  # une reponse valide, et personne n aurait compris pourquoi.
+  # Les motifs sont ancres en debut de ligne pour la meme raison.
   if [ $code -ne 0 ] || [ ! -s "$sortie" ]; then
-    # -o cree parfois un fichier vide : le laisser mettrait un tour muet
-    # dans le fil, signe de codex.
-    rm -f "$sortie"
-    echo "codex n a pas repondu (code $code)." >&2
+    rm -f "$sortie"     # -o cree parfois un fichier vide : pas de tour muet
+    if grep -qE '^Not inside a trusted directory' "$log" 2>/dev/null; then
+      echo "codex refuse ce dossier : il n est pas un depot git de confiance." >&2
+      echo "  Ouvrir la mission dans un depot git (git init suffit), ou lancer" >&2
+      echo "  codex une fois a la main dans ce dossier pour l approuver." >&2
+    elif grep -qE "You.?ve hit your usage limit|^Error: usage limit" "$log" 2>/dev/null; then
+      echo "codex a atteint son quota. Reprendre plus tard, le message est archive." >&2
+    else
+      echo "codex n a pas repondu (code $code). Log : $log" >&2
+    fi
     echo "Le message reste archive dans $envoye. Le canal est asynchrone :" >&2
     echo "continue seul sur ce qui ne depend pas de lui, ne boucle pas." >&2
     return 3
@@ -406,8 +409,14 @@ cmd_pousser() {
   moi="${DUO_QUI:-claude}"
   dernier=$(ls -1 "$ECHANGES"/*.md 2>/dev/null | grep -- "-$moi-" | tail -1)
   [ -z "$dernier" ] && { echo "aucun tour a pousser" >&2; return 1; }
-  # on retire l en-tete : l autre agent lit le corps, pas nos metadonnees
-  local corps; corps=$(sed '1,/^---$/d; 1,/^---$/d' "$dernier")
+  # On retire l en-tete : l autre agent lit le corps, pas nos metadonnees.
+  # C etait fait par deux `sed 1,/^---$/d` a la suite, et ca vidait le fichier :
+  # la premiere supprimait deja tout l en-tete (la ligne 1 EST un ---, donc la
+  # plage court jusqu au --- de fermeture), la seconde supprimait le corps
+  # jusqu a la fin faute de troisieme ---. pousser n a donc jamais rien envoye.
+  # Meme extraction que afficher_tour : on compte les delimiteurs.
+  local corps; corps=$(awk 'BEGIN{d=0} /^---$/{d++; next} d>=2' "$dernier")
+  [ -z "$corps" ] && { echo "duo: le tour $dernier n a pas de corps." >&2; return 1; }
   cmd_envoyer --sans-tour "$corps"
 }
 
@@ -438,9 +447,19 @@ afficher_tour() {
   utc=$(sed -n 's/^utc: //p' "$f" | head -1)
   printf '%s%s  %s %s%s  %s%s%s
 ' "$coul" "$VIF" "$n" "$qui" "$RAZ" "$GRIS" "$type ${utc#*T}" "$RAZ"
-  # le corps commence apres le second ---
+  # Le corps commence apres le second ---. Mais un fichier ecrit par un outil
+  # tiers peut ne pas avoir d en-tete du tout : on affiche alors le fichier
+  # entier plutot qu un tour vide. Un message affiche a moitie est pire qu un
+  # message brut.
   # barre ASCII : l UTF-8 sortait en mojibake selon la console Windows
-  awk 'BEGIN{d=0} /^---$/{d++; next} d>=2 && (NF || vu) {vu=1; print}' "$f"     | sed "s/^/  ${coul}|${RAZ} /"
+  local corps
+  if [ "$(grep -c '^---$' "$f")" -ge 2 ]; then
+    corps=$(awk 'BEGIN{d=0} /^---$/{d++; next} d>=2 && (NF || vu) {vu=1; print}' "$f")
+  else
+    corps=$(cat "$f")
+  fi
+  printf '%s
+' "$corps" | sed "s/^/  ${coul}|${RAZ} /"
   echo
 }
 
