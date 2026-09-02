@@ -66,11 +66,16 @@ ecrit le fichier lui-meme, ce qui est arrive lors du premier test.
 
 Pour Claude Desktop et claude.ai, qui attendent un zip :
 
-- [`duo-claude-codex-claude.zip`](duo-claude-codex-claude.zip)
-- [`duo-claude-codex-codex.zip`](duo-claude-codex-codex.zip)
+- **[Telecharger la version Claude Code](https://github.com/Nacha192/Codex-Claude-Code-communication-team-/raw/main/duo-claude-codex-claude.zip)**
+- **[Telecharger la version Codex](https://github.com/Nacha192/Codex-Claude-Code-communication-team-/raw/main/duo-claude-codex-codex.zip)**
 
-Le zip contient le dossier avec son `SKILL.md` a la racine, c est la forme
-attendue par l import.
+Ces deux liens telechargent directement, sans passer par une page
+intermediaire. Le zip contient le dossier avec son `SKILL.md` a la racine,
+c est la forme attendue par l import.
+
+Sinon, le bouton vert **Code** en haut de la page, puis **Download ZIP**,
+telecharge le depot entier : les deux versions decompressees, prêtes a copier
+au bon endroit.
 
 ---
 
