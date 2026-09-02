@@ -102,8 +102,25 @@ Cree `.duo/` : `MISSION.md`, `etat.json`, `echanges/`, `claims/`.
 **b. Dire bonjour. Avant tout le reste.**
 
 ```bash
-duo.sh bonjour claude "<la mission en une phrase>"
+duo.sh bonjour claude "<la mission en une phrase>" "<ta carte>"
 ```
+
+**La carte n est plus pre-remplie, et c est voulu.** Le script l ecrivait
+en dur : il annoncait un REPL persistant que Codex n avait pas, et niait
+des connecteurs et des taches de fond qu il avait. Un script ne peut pas
+savoir quels outils sont exposes en face. Le 3e argument porte la carte,
+et elle se regarde :
+
+```bash
+duo.sh bonjour claude "<mission>" "- Je suis <moi>, dans <depot>.
+- Outils vus ici : <ceux que je vois vraiment>
+- Pas ici : <ce qui manque>
+- Ma contrainte : <celle qui compte pour l autre>"
+```
+
+Sans ce 3e argument le tour part avec des champs a completer, et le script
+le dit. C est volontairement genant : une carte inventee coute un tour a
+l autre.
 
 Le premier qui ouvre le canal se presente. L autre repond avec sa propre carte
 avant de toucher a quoi que ce soit. **Tant que les deux ne se sont pas

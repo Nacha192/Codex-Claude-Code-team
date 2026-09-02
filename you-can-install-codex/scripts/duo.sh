@@ -6,9 +6,11 @@
 # n importe qui peut l ouvrir et lire de quoi ils parlaient.
 #
 #   duo.sh init "<mission>"          cree .duo/ (mission, etat, echanges, claims)
-#   duo.sh bonjour <qui> "<mission>" la poignee de main : qui je suis, ce que
-#                                    j ai, ce que je n ai pas. Toujours en
-#                                    premier, des deux cotes.
+#   duo.sh bonjour <qui> "<mission>" [carte]
+#                                    la poignee de main. La carte est la liste
+#                                    des outils REELS de la session : elle se
+#                                    regarde, elle ne se recopie pas.
+#                                    Toujours en premier, des deux cotes.
 #   duo.sh envoyer [options] "<msg>" ecrit un tour et appelle Codex
 #   duo.sh ecrire  [options] "<msg>" ecrit un tour SANS appeler Codex
 #   duo.sh claim "<fichiers>" "<but>" [minutes]   reserve des fichiers
@@ -17,14 +19,22 @@
 #   duo.sh reprendre                 le briefing complet : mission, claims,
 #                                    3 derniers tours. A lancer en premier
 #                                    quand on reprend une mission en cours.
+#   duo.sh pousser                   envoie le dernier tour DEJA ecrit, sans
+#                                    en creer un double
 #   duo.sh journal [n]               les n derniers tours dans le terminal
-#   duo.sh fil                       tout le fil, en page HTML
+#   duo.sh suivre                    le fil EN DIRECT dans le terminal, chaque
+#                                    tour s affiche des qu il arrive. Ctrl-C
+#                                    pour sortir. A proposer a l utilisateur.
+#   duo.sh fil                       tout le fil, en page HTML, pour archiver
 #   duo.sh etat                      mission, pilote, session Codex, dernier tour
 #
 #   options de envoyer/ecrire :
 #     --type <proposition|question|decision|preuve|resultat|blocage>
 #     --de <claude|codex>   --a <claude|codex>
 #     --fichiers "a.js b.md"   --reply <n>   --attendu "<ce qu on attend>"
+#
+# Variables : DUO_QUI=claude|codex (obligatoire pour claim et libere),
+#             DUO_RACINE, CODEX_BIN, NO_COLOR.
 #
 # Codes de sortie : 0 ok, 1 usage, 2 Codex introuvable, 3 Codex a echoue.
 # Le 3 compte : l appelant doit pouvoir continuer sans lui.
@@ -74,18 +84,42 @@ try: print(json.load(open(sys.argv[1],encoding='utf-8')).get(sys.argv[2],''))
 except Exception: print('')" "$ETAT" "$1" 2>/dev/null
 }
 
+# Lecture, modification, ecriture : deux appels simultanes se perdaient une
+# cle, et os.replace levait un PermissionError sous Windows quand l autre
+# tenait encore le fichier. Un verrou par mkdir, plus une reprise sur echec.
 etat_ecrire() {
   "$PY" - "$ETAT" "$1" "$2" <<'PYEOF'
-import json,sys,os,tempfile
+import json,sys,os,tempfile,time,errno
 p,k,v = sys.argv[1],sys.argv[2],sys.argv[3]
-d = {}
-if os.path.exists(p):
-    try: d = json.load(open(p,encoding='utf-8'))
-    except Exception: d = {}
-d[k] = v
-fd,tmp = tempfile.mkstemp(dir=os.path.dirname(p))
-with os.fdopen(fd,'w',encoding='utf-8') as f: json.dump(d,f,ensure_ascii=False,indent=2)
-os.replace(tmp,p)
+verrou = p + ".verrou"
+pris = False
+for _ in range(100):                       # 5 s au plus
+    try:
+        os.mkdir(verrou); pris = True; break
+    except OSError as e:
+        if e.errno != errno.EEXIST: break
+        time.sleep(0.05)
+try:
+    d = {}
+    if os.path.exists(p):
+        try: d = json.load(open(p, encoding="utf-8"))
+        except Exception: d = {}
+    d[k] = v
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(p) or ".")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(d, f, ensure_ascii=False, indent=2)
+    for essai in range(20):                # Windows garde le fichier ouvert
+        try:
+            os.replace(tmp, p); break
+        except PermissionError:
+            time.sleep(0.05)
+    else:
+        os.unlink(tmp)
+        sys.stderr.write("duo: etat.json occupe, cle " + k + " non ecrite" + chr(10))
+finally:
+    if pris:
+        try: os.rmdir(verrou)
+        except OSError: pass
 PYEOF
 }
 
@@ -151,8 +185,18 @@ EOF
 # --- ecrire un tour -------------------------------------------------------
 TYPE="proposition"; DE="${DUO_QUI:-claude}"; A="codex"; FICHIERS=""; REPLY=""; ATTENDU=""; SANS_TOUR=0
 [ "$DE" = "codex" ] && A="claude"
+# Une option sans valeur faisait planter le script sur "unbound variable"
+# a cause de set -u, avec un message que personne ne peut interpreter.
+besoin_valeur() {
+  [ $# -ge 2 ] || { echo "duo: l option $1 attend une valeur." >&2; return 1; }
+}
+
 lire_options() {
   while [ $# -gt 0 ]; do
+    case "$1" in
+      --type|--de|--a|--fichiers|--reply|--attendu)
+        besoin_valeur "$@" || return 1 ;;
+    esac
     case "$1" in
       --type)     TYPE="$2"; shift 2 ;;
       --de)       DE="$2";   shift 2 ;;
@@ -189,7 +233,9 @@ ecrire_tour() {
     echo
     printf '%s\n' "$corps"
   } > "$tmp"
-  mv -f "$tmp" "$f"          # renommage atomique : jamais de lecture partielle
+  # renommage atomique : jamais de lecture partielle. Verifie : un mv qui
+  # echoue passait inapercu et on annoncait un message qui n existait pas.
+  mv -f "$tmp" "$f" || { echo "duo: impossible d ecrire $f" >&2; rm -f "$tmp"; return 1; }
   etat_ecrire dernier_tour "$n"
   echo "$f"
 }
@@ -208,7 +254,10 @@ cmd_envoyer() {
     echo "codex introuvable. Pose CODEX_BIN=/chemin/vers/codex.exe" >&2; return 2; }
 
   local envoye="(tour deja ecrit)"
-  [ "$SANS_TOUR" = "0" ] && envoye=$(ecrire_tour "$RESTE")
+  if [ "$SANS_TOUR" = "0" ]; then
+    envoye=$(ecrire_tour "$RESTE") || {
+      echo "duo: le tour n a pas pu etre ecrit, on n appelle pas Codex." >&2; return 1; }
+  fi
   local sid; sid=$(etat_lire session_codex)
   TYPE="reponse"; DE="codex"; A="claude"; FICHIERS=""; ATTENDU=""
   # Le numero de la reponse se RESERVE lui aussi : sinon la course revenait par
@@ -220,7 +269,9 @@ cmd_envoyer() {
   # On fait donc le `cd` avant. Ce que resume herite exactement du sandbox
   # d origine n est PAS documente : ne pas s appuyer dessus, verifier au besoin.
   # `--last` devient ambigu des que deux runs tournent, d ou le session id.
-  local log="$DUO/.dernier-run.log"
+  # Un log PAR ENVOI : deux envoyer concurrents partageaient le meme fichier,
+  # donc l un lisait l erreur ou le session id de l autre.
+  local log="$DUO/.run-$n.log"
   if [ -n "$sid" ]; then
     ( cd "$RACINE" && "$codex" exec resume "$sid" -o "$sortie" "$RESTE" ) >"$log" 2>&1
   else
@@ -278,6 +329,9 @@ cmd_envoyer() {
   fi
 
   if [ $code -ne 0 ] || [ ! -s "$sortie" ]; then
+    # -o cree parfois un fichier vide : le laisser mettrait un tour muet
+    # dans le fil, signe de codex.
+    rm -f "$sortie"
     echo "codex n a pas repondu (code $code)." >&2
     echo "Le message reste archive dans $envoye. Le canal est asynchrone :" >&2
     echo "continue seul sur ce qui ne depend pas de lui, ne boucle pas." >&2
@@ -296,17 +350,20 @@ cmd_envoyer() {
 cmd_bonjour() {
   local qui="${1:-claude}" mission="${2:-}"
   mkdir -p "$ECHANGES" "$CLAIMS"
-  local carte
-  if [ "$qui" = "codex" ]; then
-    carte="- **Je suis Codex CLI**, dans \`$(basename "$RACINE")\`.
-- **J ai** : generation et retouche d images, pilotage de navigateur, un REPL Node persistant, l inspection visuelle en boucle.
-- **Je n ai pas** : de connecteurs metier authentifies, de memoire entre les sessions hors fichiers, de taches en arriere-plan.
-- **Ma contrainte** : je ne peux pas rester vivant a attendre. Je publie et je m arrete, c est toi qui me relances."
-  else
-    carte="- **Je suis Claude Code**, dans \`$(basename "$RACINE")\`.
-- **J ai** : le contexte metier long, les connecteurs, les taches en arriere-plan avec reveil, les sous-agents, la lecture et l ecriture rapides du depot.
-- **Je n ai pas** : de generation d images, de pilotage de navigateur, de REPL persistant.
-- **Ma contrainte** : je vois le depot et l historique, pas ce que tu vois toi. Corrige-moi quand je suppose."
+  # La carte n est PLUS ecrite en dur. Elle l etait, et elle annoncait un REPL
+  # persistant que Codex n avait pas, en niant des connecteurs et des taches de
+  # fond qu il avait. Codex a demontre les deux. Un script ne peut pas savoir
+  # quels outils sont exposes dans la session d en face : c est l agent qui
+  # regarde et qui declare. Le 3e argument porte cette carte.
+  local carte="${3:-}"
+  if [ -z "$carte" ]; then
+    carte="- **Je suis $([ "$qui" = codex ] && echo 'Codex CLI' || echo 'Claude Code')**, dans \`$(basename "$RACINE")\`.
+- **Les outils que je vois VRAIMENT dans cette session :** (a remplir en
+  regardant mes outils, jamais en recopiant un tableau)
+- **Ce que je ne vois pas ici :** (a remplir)
+- **Ma contrainte d orchestration :** (a remplir)"
+    echo "duo: carte non fournie. Le modele est dans le tour, a completer." >&2
+    echo "     Usage : duo.sh bonjour $qui \"<mission>\" \"<ta carte>\"" >&2
   fi
   DE="$qui"; [ "$qui" = "codex" ] && A="claude" || A="codex"
   TYPE="bonjour"; FICHIERS=""; REPLY=""
@@ -343,8 +400,11 @@ une supposition fausse coute une demi-journee."
 # duo.sh bonjour ecrit un tour. L envoyer avec "envoyer" en creerait un second,
 # identique. pousser prend le dernier tour ecrit et le transmet tel quel.
 cmd_pousser() {
-  local dernier
-  dernier=$(ls -1 "$ECHANGES"/*.md 2>/dev/null | grep -v -- '-codex-' | tail -1)
+  # On pousse SON dernier tour, pas "tout sauf ceux de codex" : code en dur,
+  # Codex poussait le message de Claude a sa place.
+  local moi dernier
+  moi="${DUO_QUI:-claude}"
+  dernier=$(ls -1 "$ECHANGES"/*.md 2>/dev/null | grep -- "-$moi-" | tail -1)
   [ -z "$dernier" ] && { echo "aucun tour a pousser" >&2; return 1; }
   # on retire l en-tete : l autre agent lit le corps, pas nos metadonnees
   local corps; corps=$(sed '1,/^---$/d; 1,/^---$/d' "$dernier")
@@ -355,8 +415,16 @@ cmd_pousser() {
 # --- suivre : le fil dans le terminal, qui se met a jour tout seul --------
 # Pas une page web. Un terminal qu on laisse ouvert a cote, qui affiche chaque
 # nouveau tour des qu il arrive. La commande ne rend la main qu au Ctrl-C.
-COUL_CLAUDE=$'[38;5;179m'; COUL_CODEX=$'[38;5;74m'
-GRIS=$'[38;5;244m'; VIF=$'[1m'; RAZ=$'[0m'
+# Couleurs. Ecrites en \033 et non en caractere ESC brut : un ESC dans le
+# fichier survit mal a une edition, a un copier-coller ou a un diff.
+# Desactivables : NO_COLOR=1, la convention usuelle, et automatiquement
+# quand la sortie n est pas un terminal (redirection vers un fichier).
+if [ -n "${NO_COLOR:-}" ] || [ ! -t 1 ]; then
+  COUL_CLAUDE=""; COUL_CODEX=""; GRIS=""; VIF=""; RAZ=""
+else
+  COUL_CLAUDE=$'\033[38;5;179m'; COUL_CODEX=$'\033[38;5;74m'
+  GRIS=$'\033[38;5;244m'; VIF=$'\033[1m'; RAZ=$'\033[0m'
+fi
 
 # Un tour, mis en forme. Utilise par journal et par suivre : une seule
 # presentation, sinon les deux divergent.
@@ -431,11 +499,37 @@ cmd_claim() {
   echo "$f"
 }
 
+# Le claim annonce "expire dans 45 min" depuis le debut, et RIEN ne l appliquait
+# ni ne le signalait. Un agent qui rendait la main sans liberer bloquait donc un
+# fichier pour toujours, c est-a-dire exactement ce que l expiration devait
+# empecher. On calcule l age et on le dit.
+claim_perime() {                       # 0 = perime
+  "$PY" - "$1" <<'PYEOF'
+import sys, re, datetime
+try:
+    t = open(sys.argv[1], encoding="utf-8").read()
+    pose = re.search(r"pose le : (\S+)", t).group(1)
+    mins = int(re.search(r"expire dans : (\d+)", t).group(1))
+    t0 = datetime.datetime.strptime(pose, "%Y-%m-%dT%H:%M:%SZ")
+    age = (datetime.datetime.utcnow() - t0).total_seconds() / 60
+    sys.exit(0 if age > mins else 1)
+except Exception:
+    sys.exit(1)                        # illisible : on ne perime pas au hasard
+PYEOF
+}
+
 cmd_claims() {
-  local n=0
+  local n=0 f
   for f in "$CLAIMS"/*.md; do
     [ -e "$f" ] || continue
-    cat "$f"; echo; n=$((n+1))
+    cat "$f"
+    if claim_perime "$f"; then
+      printf '%s  ^ EXPIRE. Le fichier est libre : ecrire a son auteur avant
+' "$GRIS"
+      printf '    de le prendre, il tourne peut-etre encore.%s
+' "$RAZ"
+    fi
+    echo; n=$((n+1))
   done
   [ $n -eq 0 ] && echo "(rien de reserve)"
   return 0
@@ -526,7 +620,7 @@ cmd_etat() {
 
 case "${1:-}" in
   init)    shift; cmd_init "${1:-}" ;;
-  bonjour) shift; cmd_bonjour "${1:-claude}" "${2:-}" ;;
+  bonjour) shift; cmd_bonjour "${1:-claude}" "${2:-}" "${3:-}" ;;
   envoyer) shift; cmd_envoyer "$@" ;;
   ecrire)  shift; cmd_ecrire "$@" ;;
   claim)   shift; cmd_claim "${1:-}" "${2:-}" "${3:-45}" ;;
