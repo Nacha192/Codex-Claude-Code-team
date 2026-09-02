@@ -11,6 +11,57 @@ cas et a rendre le second difficile.
 
 ---
 
+## Demarrage rapide
+
+**Il faut installer les deux.** Un skill chez Claude Code, un chez Codex. Si un
+seul des deux l a, il suit un protocole que l autre ne connait pas, et rien ne
+fonctionne. Ce n est pas un skill au choix, c est une paire.
+
+Les deux agents doivent aussi travailler **sur la meme machine et dans le meme
+depot** : le canal est un dossier de fichiers, pas un service en ligne.
+
+**1. Recuperer le depot**
+
+```bash
+git clone https://github.com/Nacha192/Codex-Claude-Code-communication-team-.git
+cd Codex-Claude-Code-communication-team-
+```
+
+**2. Poser le skill de Claude Code**, dans le projet ou vous travaillez :
+
+```bash
+mkdir -p /chemin/vers/votre-projet/.claude/skills
+cp -r claude-code /chemin/vers/votre-projet/.claude/skills/duo-claude-codex
+```
+
+Ou `~/.claude/skills/duo-claude-codex` pour l avoir dans tous vos projets.
+
+**3. Poser le skill de Codex**, dans le meme projet :
+
+```bash
+mkdir -p /chemin/vers/votre-projet/.agents/skills
+cp -r codex /chemin/vers/votre-projet/.agents/skills/duo-claude-codex
+```
+
+**Rien d autre a installer.** Pas de paquet, pas de dependance, pas de service.
+Les scripts utilisent bash et python, deja presents sur la plupart des machines,
+et le binaire de Codex si vous voulez que Claude puisse l appeler tout seul.
+
+**4. Verifier**, dans un dossier quelconque :
+
+```bash
+bash .claude/skills/duo-claude-codex/scripts/duo.sh init "essai"
+bash .claude/skills/duo-claude-codex/scripts/duo.sh bonjour claude "essai"
+bash .claude/skills/duo-claude-codex/scripts/duo.sh journal 1
+```
+
+Si le dernier affiche le message avec son en-tete numerote, tout est en place.
+
+**5. S en servir.** Le skill ne se declenche pas tout seul, c est voulu. On le
+demande : « utilise le skill duo-claude-codex pour cette mission ».
+
+---
+
 ## Ce que ca resout
 
 | Sans protocole | Avec |
