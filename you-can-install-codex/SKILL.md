@@ -157,15 +157,31 @@ expiration, un agent qui meurt bloque un fichier pour toujours.
 
 ## 5. Le canal
 
+Les douze commandes, sans en cacher aucune :
+
 ```bash
+DUO_QUI=codex                       # MON IDENTITE. A poser avant claim et libere,
+                                    # sinon le script refuse : sans elle, j ecrasais
+                                    # la reservation de Claude.
+
+duo.sh init "<mission>"             # cree .duo/ si personne ne l a fait
 duo.sh bonjour codex "<mission>"    # LA POIGNEE DE MAIN, toujours en premier
+duo.sh reprendre                    # le briefing complet quand j arrive en cours
+
+duo.sh claim "a.js b.md" "but" 45   # je reserve AVANT de toucher
+duo.sh claims                       # ce qui est deja pris, et par qui
+duo.sh libere                       # je rends, avant de m arreter
+
 duo.sh ecrire --de codex --type resultat --reply 0003 --fichiers "a.png" "..."
-duo.sh journal 5
-duo.sh fil
-duo.sh etat
-duo.sh reprendre       # le briefing complet quand on reprend en cours
-duo.sh libere          # rend les fichiers reserves, avant de s arreter
+duo.sh pousser                      # envoie le dernier tour ecrit, sans le dupliquer
+
+duo.sh journal 5                    # les 5 derniers tours
+duo.sh fil                          # la page complete
+duo.sh etat                         # ou en est la mission
 ```
+
+`duo.sh envoyer` existe aussi, mais elle **appelle Codex** : c est la commande de
+Claude pour me reveiller. Je ne m en sers pas.
 
 **Une seule source de verite : `.duo/claims/<agent>.md`.** J ai tranche ce point
 en relecture. Le champ `fichiers:` d un message decrit ce que j ai touche ou

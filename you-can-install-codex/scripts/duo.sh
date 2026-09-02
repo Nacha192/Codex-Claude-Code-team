@@ -41,6 +41,7 @@ RACINE="${DUO_RACINE:-$PWD}"
 DUO="$RACINE/.duo"
 ECHANGES="$DUO/echanges"
 CLAIMS="$DUO/claims"
+NUMEROS="$DUO/.numeros"
 MISSION="$DUO/MISSION.md"
 ETAT="$DUO/etat.json"
 
@@ -90,10 +91,26 @@ PYEOF
 
 # Le numero suivant se deduit des fichiers presents : pas de compteur a
 # desynchroniser, et un fichier supprime a la main ne casse rien.
+# Le numero est une ressource partagee : deux agents qui ecrivaient en meme
+# temps calculaient le meme, et un des deux messages disparaissait. Mesure :
+# 8 pertes sur 10 envois simultanes. On reserve donc le numero par un mkdir,
+# atomique partout, Windows compris.
 prochain_numero() {
   local n
-  n=$(ls -1 "$ECHANGES" 2>/dev/null | sed -n 's/^\([0-9]\{4\}\)-.*/\1/p' | sort -n | tail -1)
+  n=$( { ls -1 "$ECHANGES" 2>/dev/null | sed -n 's/^\([0-9]\{4\}\)-.*/\1/p'
+         ls -1 "$NUMEROS"  2>/dev/null ; } | sort -n | tail -1 )
   printf '%04d' $(( 10#${n:-0} + 1 ))
+}
+
+reserver_numero() {
+  local n t=0
+  mkdir -p "$NUMEROS"
+  while :; do
+    n=$(prochain_numero)
+    if mkdir "$NUMEROS/$n" 2>/dev/null; then printf '%s' "$n"; return 0; fi
+    t=$((t+1))
+    [ "$t" -gt 200 ] && { echo "duo: impossible de reserver un numero" >&2; return 1; }
+  done
 }
 
 cmd_init() {
@@ -132,7 +149,8 @@ EOF
 }
 
 # --- ecrire un tour -------------------------------------------------------
-TYPE="proposition"; DE="claude"; A="codex"; FICHIERS=""; REPLY=""; ATTENDU=""; SANS_TOUR=0
+TYPE="proposition"; DE="${DUO_QUI:-claude}"; A="codex"; FICHIERS=""; REPLY=""; ATTENDU=""; SANS_TOUR=0
+[ "$DE" = "codex" ] && A="claude"
 lire_options() {
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -152,9 +170,11 @@ lire_options() {
 ecrire_tour() {
   local corps="$1" n f tmp
   mkdir -p "$ECHANGES"
-  n=$(prochain_numero)
+  n=$(reserver_numero) || return 1
   f="$ECHANGES/$n-$DE-$TYPE.md"
-  tmp="$f.partiel"
+  # nom de temporaire UNIQUE : deux ecritures simultanees partageaient le meme
+  # et se detruisaient l une l autre.
+  tmp="$f.$$-${RANDOM:-0}.partiel"
   {
     echo "---"
     echo "n: $n"
@@ -212,7 +232,8 @@ cmd_envoyer() {
   # Dependance testee sur codex-cli 0.152.0. Si l ancre disparait, on le dit.
   if [ -z "$sid" ]; then
     local trouve
-    trouve=$(sed -n 's/.*session id:[^0-9a-f]*\([0-9a-f-]\{36\}\).*//p' "$log" | head -1)
+    trouve=$(grep -o 'session id:.*' "$log" | head -1 \
+             | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
     if [ -n "$trouve" ]; then
       etat_ecrire session_codex "$trouve"
     else
@@ -313,11 +334,28 @@ cmd_pousser() {
 }
 
 # --- claims : dire ce qu on prend AVANT de le prendre ----------------------
+# L identite n a pas de valeur par defaut sur les commandes qui ECRASENT ou
+# SUPPRIMENT. Sans ce garde-fou, Codex lancant `duo.sh claim` sans DUO_QUI
+# ecrivait dans claude.md, et `duo.sh libere` supprimait la reservation de
+# Claude. Constate en test, pas suppose.
+qui_suis_je() {
+  if [ -z "${DUO_QUI:-}" ]; then
+    echo "duo: pose DUO_QUI=claude ou DUO_QUI=codex avant claim/libere." >&2
+    echo "     Sans ca, on ecrase la reservation de l autre." >&2
+    return 1
+  fi
+  case "$DUO_QUI" in
+    claude|codex) printf '%s' "$DUO_QUI" ;;
+    *) echo "duo: DUO_QUI vaut claude ou codex, pas '$DUO_QUI'." >&2; return 1 ;;
+  esac
+}
+
 cmd_claim() {
-  local fichiers="${1:-}" but="${2:-}" min="${3:-45}" qui="${DUO_QUI:-claude}"
+  local fichiers="${1:-}" but="${2:-}" min="${3:-45}" qui
+  qui=$(qui_suis_je) || return 1
   [ -z "$fichiers" ] && { echo "usage: duo.sh claim \"a.js b.md\" \"objectif\" [minutes]" >&2; return 1; }
   mkdir -p "$CLAIMS"
-  local f="$CLAIMS/$qui.md" tmp="$CLAIMS/$qui.partiel"
+  local f="$CLAIMS/$qui.md" tmp="$CLAIMS/$qui.$$-${RANDOM:-0}.partiel"
   {
     echo "# Reserve par $qui"
     echo "- pose le : $(utc)"
@@ -364,7 +402,8 @@ cmd_reprendre() {
 
 # --- liberer : un claim qu on ne libere pas est un fichier mort ------------
 cmd_libere() {
-  local qui="${DUO_QUI:-claude}"
+  local qui
+  qui=$(qui_suis_je) || return 1
   if [ -f "$CLAIMS/$qui.md" ]; then
     rm -f "$CLAIMS/$qui.md"; echo "$qui a libere ses fichiers"
   else

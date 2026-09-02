@@ -159,9 +159,16 @@ toujours un bloc "pendant que tu lis, je fais ceci, ne le refais pas".
 **f. Reserver avant de toucher.** Avant de modifier quoi que ce soit :
 
 ```bash
+export DUO_QUI=claude    # ou codex. Obligatoire pour claim et libere.
 duo.sh claim "moteur.html rendu.mjs" "refonte des gabarits" 45
-duo.sh claims        # avant de toucher un fichier, on regarde
+duo.sh claims            # avant de toucher un fichier, on regarde
 ```
+
+**`DUO_QUI` n a pas de valeur par defaut, et c est voulu.** Il y en avait une,
+`claude`, et elle creait exactement le probleme que les claims doivent empecher :
+Codex lancant `duo.sh claim` sans la poser ecrivait dans `claude.md`, donc
+ecrasait la reservation de l autre, et `duo.sh libere` la supprimait. Trouve par
+Codex, reproduit, corrige. Le script refuse maintenant plutot que de deviner.
 
 Une reservation porte les fichiers, l objectif, et une **expiration**. Sans
 expiration, un agent qui rend la main bloque un fichier pour toujours. C est la
