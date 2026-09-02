@@ -24,16 +24,17 @@ cas et a rendre le second difficile.
 
 ---
 
-## Les branches
+## Ce qu il y a dedans
 
-| Branche | Contenu |
+| | |
 |---|---|
-| `main` | ce README et les deux versions |
-| `claude-code` | la version Claude Code, `SKILL.md` a la racine |
-| `codex` | la version Codex, `SKILL.md` a la racine |
+| `claude-code/` | la version Claude Code, a poser dans `.claude/skills/` |
+| `codex/` | la version Codex, a poser dans `.agents/skills/` ou `~/.codex/skills/` |
+| les deux `.zip` | les memes, prets a importer la ou un zip est attendu |
 
-Les branches `claude-code` et `codex` sont faites pour etre clonees directement
-au bon endroit.
+Une seule branche, `main`, et une seule copie de chaque version. Deux copies du
+meme fichier finissent toujours par diverger, et ce depot passe une section
+entiere a expliquer pourquoi c est le pire resultat possible.
 
 ---
 
