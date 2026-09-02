@@ -84,12 +84,27 @@ et le binaire de Codex si vous voulez que Claude puisse l appeler tout seul.
 **4. Verifier**, dans un dossier quelconque :
 
 ```bash
-bash .claude/skills/duo-claude-codex/scripts/duo.sh init "essai"
-bash .claude/skills/duo-claude-codex/scripts/duo.sh bonjour claude "essai"
-bash .claude/skills/duo-claude-codex/scripts/duo.sh journal 1
+D=.claude/skills/duo-claude-codex/scripts/duo.sh
+bash $D init "essai"
+bash $D bonjour claude "essai" "- Je suis Claude Code, outils : shell, git."
+bash $D journal 1
 ```
 
-Si le dernier affiche le message avec son en-tete numerote, tout est en place.
+Si le dernier affiche le message en couleur avec son numero et son auteur,
+tout est en place.
+
+Le 3e argument de `bonjour` est la **carte** : les outils que l agent voit
+vraiment dans sa session. Sans elle, le tour part avec des champs a completer et
+le script vous le dit. C est volontaire : le script ne peut pas deviner ce qui
+est expose en face, et une carte inventee coute un tour a l autre.
+
+Pour suivre une conversation en direct, dans un second terminal :
+
+```bash
+bash .claude/skills/duo-claude-codex/scripts/duo.sh suivre
+```
+
+Chaque tour s affiche des qu il arrive. Ctrl-C pour sortir.
 
 **5. S en servir.** Le skill ne se declenche pas tout seul, c est voulu. On le
 demande : « utilise le skill duo-claude-codex pour cette mission ».
@@ -193,8 +208,11 @@ au bon endroit.
 pour un seul projet, ou `~/.claude/skills/` pour tous. Rien a redemarrer.
 
 **Codex** : `<depot>/.agents/skills/duo-claude-codex/` ou `~/.codex/skills/`.
-**Garder `openai.yaml`** : sans lui, Codex charge le skill des que la description
-correspond, meme quand le `SKILL.md` dit qu il est explicite. Constate en direct.
+**Garder `agents/openai.yaml`**, a cet emplacement exact, dans un sous-dossier
+`agents/` du skill : c est la ou les skills livres par OpenAI le placent. Il
+retire a Codex le droit d invoquer le skill de lui-meme. Sans lui, il se charge
+des que la description correspond, meme quand le `SKILL.md` dit qu il est
+explicite. Constate en direct.
 
 Detail complet dans `INSTALLATION.md`.
 
@@ -210,9 +228,14 @@ duo.sh init "<mission>"        # cree .duo/
 duo.sh bonjour claude "<...>"  # la poignee de main, toujours en premier
 duo.sh claim "a.js" "..." 45   # reserver avant de toucher
 duo.sh envoyer --type question "..."
+duo.sh pousser                 # envoyer un tour deja ecrit, sans le dupliquer
 duo.sh journal 5               # de quoi on parle
-duo.sh fil                     # tout le fil, en page HTML
+duo.sh suivre                  # LE DIRECT : chaque tour s affiche des qu il
+                               # arrive. C est la commande a donner a
+                               # l utilisateur pour qu il suive la conversation.
+duo.sh fil                     # tout le fil, en page HTML, pour archiver
 duo.sh reprendre               # le briefing complet, en un appel
+duo.sh claims                  # ce qui est reserve, et ce qui a expire
 duo.sh libere                  # rendre les fichiers reserves
 ```
 
@@ -253,4 +276,30 @@ Sur quatre defauts releves lors de la mise au point, trois etaient justes. Le
 quatrieme aurait fait perdre du temps s il avait ete suivi les yeux fermes.
 
 Et l inverse : quand il corrige avec une preuve reproductible, il gagne, meme si
-ca demolit le design. C est arrive six fois.
+ca demolit le design.
+
+---
+
+## Ce que la relecture croisee a donne
+
+Le chiffre est le meilleur argument de ce depot, alors autant le donner en
+entier. **Dix-neuf defauts trouves sur le canal, en une journee**, repartis
+ainsi :
+
+- **cinq par Codex**, en relisant la version du skill ecrite a sa place. Dont
+  celui-ci, que personne d autre ne pouvait voir : le script laissait `claude`
+  comme identite par defaut, donc Codex qui posait une reservation ecrasait
+  celle de Claude et pouvait la supprimer. Le mecanisme cense empecher les deux
+  de se marcher dessus faisait exactement ca.
+- **quatre par le test de bout en bout**, celui qui appelle vraiment Codex et
+  reprend la session. Dont : un echec archive dans le fil signe `de: codex`,
+  donc un message d erreur qui se faisait passer pour sa reponse.
+- **onze par une relecture ligne a ligne**. Dont : les reservations annoncaient
+  `expire dans 45 min` et rien ne l appliquait ni ne le signalait, et la
+  poignee de main imprimait encore une carte de capacites que Codex avait
+  demontee par ecrit deux heures plus tot.
+
+La lecon n est pas que le code etait mauvais. Elle est que **la relecture par
+l autre agent trouve ce que l auteur ne peut structurellement pas voir**, et
+qu un test de bout en bout trouve ce qu aucune relecture ne trouve. C est
+exactement ce que ce protocole sert a organiser.
