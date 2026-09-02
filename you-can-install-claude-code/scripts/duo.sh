@@ -46,9 +46,11 @@ ETAT="$DUO/etat.json"
 
 PY=$(command -v python || command -v python3 || echo python)
 
-# Codex n est pas dans le PATH sur une installation Windows standard, et le
-# dossier d installation contient un hash qui change a chaque mise a jour :
-# ne jamais coder le chemin en dur.
+# Codex PEUT etre dans le PATH (installation npm : un shim `codex` y atterrit),
+# mais ce n est pas garanti. Le dossier d installation, lui, contient un hash
+# qui change a chaque mise a jour, et plusieurs versions peuvent coexister :
+# ne jamais coder le chemin en dur, et garder le glob en DERNIER recours.
+# Verifie le 2026-09-02 par Codex : `command -v codex` resolvait bien.
 trouver_codex() {
   if [ -n "${CODEX_BIN:-}" ] && [ -x "$CODEX_BIN" ]; then echo "$CODEX_BIN"; return 0; fi
   if command -v codex >/dev/null 2>&1; then command -v codex; return 0; fi
@@ -192,8 +194,10 @@ cmd_envoyer() {
   local n; n=$(prochain_numero)
   local sortie="$ECHANGES/$n-codex-reponse.md"
 
-  # resume herite du cwd et du sandbox de la session : il REFUSE -C et -s.
-  # Et --last devient ambigu des que deux runs tournent, d ou le session id.
+  # `codex exec resume --help` ne declare ni -C ni -s : les passer echoue.
+  # On fait donc le `cd` avant. Ce que resume herite exactement du sandbox
+  # d origine n est PAS documente : ne pas s appuyer dessus, verifier au besoin.
+  # `--last` devient ambigu des que deux runs tournent, d ou le session id.
   local log="$DUO/.dernier-run.log"
   if [ -n "$sid" ]; then
     ( cd "$RACINE" && "$codex" exec resume "$sid" -o "$sortie" "$RESTE" ) >"$log" 2>&1
@@ -202,13 +206,18 @@ cmd_envoyer() {
   fi
   local code=$?
 
-  # Codex imprime "session id: <uuid>" dans son en-tete de run. C est la source
-  # la plus fiable : pas de fouille dans ~/.codex/sessions, pas de --last
-  # ambigu des que deux runs tournent en parallele.
+  # Codex imprime "session id: <uuid>" dans son en-tete de run. On s ancre sur
+  # L ETIQUETTE, jamais sur "le premier UUID du log" : un UUID peut apparaitre
+  # dans la reponse elle-meme, et le format de sortie n est pas un contrat.
+  # Dependance testee sur codex-cli 0.152.0. Si l ancre disparait, on le dit.
   if [ -z "$sid" ]; then
     local trouve
-    trouve=$(grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' "$log" | head -1)
-    [ -n "$trouve" ] && etat_ecrire session_codex "$trouve"
+    trouve=$(sed -n 's/.*session id:[^0-9a-f]*\([0-9a-f-]\{36\}\).*//p' "$log" | head -1)
+    if [ -n "$trouve" ]; then
+      etat_ecrire session_codex "$trouve"
+    else
+      echo "duo: session id introuvable dans le log, la reprise passera par --last" >&2
+    fi
   fi
 
   # Le quota est une panne temporaire, pas un bug : on le nomme pour que

@@ -6,10 +6,17 @@
 # n importe qui peut l ouvrir et lire de quoi ils parlaient.
 #
 #   duo.sh init "<mission>"          cree .duo/ (mission, etat, echanges, claims)
+#   duo.sh bonjour <qui> "<mission>" la poignee de main : qui je suis, ce que
+#                                    j ai, ce que je n ai pas. Toujours en
+#                                    premier, des deux cotes.
 #   duo.sh envoyer [options] "<msg>" ecrit un tour et appelle Codex
 #   duo.sh ecrire  [options] "<msg>" ecrit un tour SANS appeler Codex
 #   duo.sh claim "<fichiers>" "<but>" [minutes]   reserve des fichiers
 #   duo.sh claims                    ce qui est reserve, par qui, jusqu a quand
+#   duo.sh libere                    rend les fichiers qu on avait reserves
+#   duo.sh reprendre                 le briefing complet : mission, claims,
+#                                    3 derniers tours. A lancer en premier
+#                                    quand on reprend une mission en cours.
 #   duo.sh journal [n]               les n derniers tours dans le terminal
 #   duo.sh fil                       tout le fil, en page HTML
 #   duo.sh etat                      mission, pilote, session Codex, dernier tour
@@ -39,9 +46,11 @@ ETAT="$DUO/etat.json"
 
 PY=$(command -v python || command -v python3 || echo python)
 
-# Codex n est pas dans le PATH sur une installation Windows standard, et le
-# dossier d installation contient un hash qui change a chaque mise a jour :
-# ne jamais coder le chemin en dur.
+# Codex PEUT etre dans le PATH (installation npm : un shim `codex` y atterrit),
+# mais ce n est pas garanti. Le dossier d installation, lui, contient un hash
+# qui change a chaque mise a jour, et plusieurs versions peuvent coexister :
+# ne jamais coder le chemin en dur, et garder le glob en DERNIER recours.
+# Verifie le 2026-09-02 par Codex : `command -v codex` resolvait bien.
 trouver_codex() {
   if [ -n "${CODEX_BIN:-}" ] && [ -x "$CODEX_BIN" ]; then echo "$CODEX_BIN"; return 0; fi
   if command -v codex >/dev/null 2>&1; then command -v codex; return 0; fi
@@ -123,7 +132,7 @@ EOF
 }
 
 # --- ecrire un tour -------------------------------------------------------
-TYPE="proposition"; DE="claude"; A="codex"; FICHIERS=""; REPLY=""; ATTENDU=""
+TYPE="proposition"; DE="claude"; A="codex"; FICHIERS=""; REPLY=""; ATTENDU=""; SANS_TOUR=0
 lire_options() {
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -133,6 +142,7 @@ lire_options() {
       --fichiers) FICHIERS="$2"; shift 2 ;;
       --reply)    REPLY="$2"; shift 2 ;;
       --attendu)  ATTENDU="$2"; shift 2 ;;
+      --sans-tour) SANS_TOUR=1; shift ;;
       *) break ;;
     esac
   done
@@ -177,14 +187,17 @@ cmd_envoyer() {
   local codex; codex=$(trouver_codex) || {
     echo "codex introuvable. Pose CODEX_BIN=/chemin/vers/codex.exe" >&2; return 2; }
 
-  local envoye; envoye=$(ecrire_tour "$RESTE")
+  local envoye="(tour deja ecrit)"
+  [ "$SANS_TOUR" = "0" ] && envoye=$(ecrire_tour "$RESTE")
   local sid; sid=$(etat_lire session_codex)
   TYPE="reponse"; DE="codex"; A="claude"; FICHIERS=""; ATTENDU=""
   local n; n=$(prochain_numero)
   local sortie="$ECHANGES/$n-codex-reponse.md"
 
-  # resume herite du cwd et du sandbox de la session : il REFUSE -C et -s.
-  # Et --last devient ambigu des que deux runs tournent, d ou le session id.
+  # `codex exec resume --help` ne declare ni -C ni -s : les passer echoue.
+  # On fait donc le `cd` avant. Ce que resume herite exactement du sandbox
+  # d origine n est PAS documente : ne pas s appuyer dessus, verifier au besoin.
+  # `--last` devient ambigu des que deux runs tournent, d ou le session id.
   local log="$DUO/.dernier-run.log"
   if [ -n "$sid" ]; then
     ( cd "$RACINE" && "$codex" exec resume "$sid" -o "$sortie" "$RESTE" ) >"$log" 2>&1
@@ -193,13 +206,18 @@ cmd_envoyer() {
   fi
   local code=$?
 
-  # Codex imprime "session id: <uuid>" dans son en-tete de run. C est la source
-  # la plus fiable : pas de fouille dans ~/.codex/sessions, pas de --last
-  # ambigu des que deux runs tournent en parallele.
+  # Codex imprime "session id: <uuid>" dans son en-tete de run. On s ancre sur
+  # L ETIQUETTE, jamais sur "le premier UUID du log" : un UUID peut apparaitre
+  # dans la reponse elle-meme, et le format de sortie n est pas un contrat.
+  # Dependance testee sur codex-cli 0.152.0. Si l ancre disparait, on le dit.
   if [ -z "$sid" ]; then
     local trouve
-    trouve=$(grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' "$log" | head -1)
-    [ -n "$trouve" ] && etat_ecrire session_codex "$trouve"
+    trouve=$(sed -n 's/.*session id:[^0-9a-f]*\([0-9a-f-]\{36\}\).*//p' "$log" | head -1)
+    if [ -n "$trouve" ]; then
+      etat_ecrire session_codex "$trouve"
+    else
+      echo "duo: session id introuvable dans le log, la reprise passera par --last" >&2
+    fi
   fi
 
   # Le quota est une panne temporaire, pas un bug : on le nomme pour que
@@ -209,8 +227,18 @@ cmd_envoyer() {
     rm -f "$sortie"; return 3
   fi
 
+  # -o n est pas toujours honore : quand la reponse part sur la sortie standard
+  # et pas dans le fichier, on la recupere du log plutot que de la perdre. Bug
+  # trouve au premier test reel du protocole : les images etaient produites et
+  # la reponse n etait nulle part dans le fil.
+  if [ ! -s "$sortie" ] && [ -s "$log" ] && ! grep -q "usage limit" "$log"; then
+    { echo "---"; echo "n: $n"; echo "de: codex"; echo "a: claude";
+      echo "type: reponse"; echo "utc: $(utc)";
+      echo "note: recupere du log, -o n avait rien ecrit"; echo "---"; echo
+      cat "$log"; } > "$sortie.partiel" && mv -f "$sortie.partiel" "$sortie"
+  fi
+
   if [ $code -ne 0 ] || [ ! -s "$sortie" ]; then
-    rm -f "$sortie"
     echo "codex n a pas repondu (code $code)." >&2
     echo "Le message reste archive dans $envoye. Le canal est asynchrone :" >&2
     echo "continue seul sur ce qui ne depend pas de lui, ne boucle pas." >&2
@@ -219,6 +247,69 @@ cmd_envoyer() {
 
   etat_ecrire dernier_tour "$n"
   echo "$sortie"
+}
+
+# --- bonjour : la poignee de main d ouverture ------------------------------
+# Ce n est pas de la politesse. Sans elle, chacun suppose ce que l autre sait
+# faire, et on a deja perdu une demi-journee sur une supposition fausse. Le
+# bonjour porte une carte d identite : qui je suis, ce que j ai, ce que je n ai
+# pas, et ce que je commence tout de suite.
+cmd_bonjour() {
+  local qui="${1:-claude}" mission="${2:-}"
+  mkdir -p "$ECHANGES" "$CLAIMS"
+  local carte
+  if [ "$qui" = "codex" ]; then
+    carte="- **Je suis Codex CLI**, dans \`$(basename "$RACINE")\`.
+- **J ai** : generation et retouche d images, pilotage de navigateur, un REPL Node persistant, l inspection visuelle en boucle.
+- **Je n ai pas** : de connecteurs metier authentifies, de memoire entre les sessions hors fichiers, de taches en arriere-plan.
+- **Ma contrainte** : je ne peux pas rester vivant a attendre. Je publie et je m arrete, c est toi qui me relances."
+  else
+    carte="- **Je suis Claude Code**, dans \`$(basename "$RACINE")\`.
+- **J ai** : le contexte metier long, les connecteurs, les taches en arriere-plan avec reveil, les sous-agents, la lecture et l ecriture rapides du depot.
+- **Je n ai pas** : de generation d images, de pilotage de navigateur, de REPL persistant.
+- **Ma contrainte** : je vois le depot et l historique, pas ce que tu vois toi. Corrige-moi quand je suppose."
+  fi
+  DE="$qui"; [ "$qui" = "codex" ] && A="claude" || A="codex"
+  TYPE="bonjour"; FICHIERS=""; REPLY=""
+
+  # Le deuxieme bonjour n ouvre pas le canal, il y repond. On le dit, et on
+  # pointe le tour auquel il repond : le fil doit se lire sans deviner.
+  local premier ouverture
+  premier=$(ls -1 "$ECHANGES" 2>/dev/null | grep -- '-bonjour\.md$' | head -1)
+  if [ -n "$premier" ]; then
+    REPLY="${premier%%-*}"
+    ATTENDU="qu on choisisse le pilote et qu on demarre"
+    ouverture="Bonjour. Je reponds au tien."
+  else
+    ATTENDU="ton bonjour, avec ta propre carte"
+    ouverture="Bonjour. J ouvre le canal."
+  fi
+
+  ecrire_tour "$ouverture
+
+$carte
+
+**La mission telle que je la comprends :** ${mission:-(a completer)}
+
+**Le pilote que je propose, et pourquoi :** (a completer)
+
+**Ce que je commence tout de suite, ne le refais pas :** (a completer)
+
+**Avant de commencer :** corrige ma carte si elle est fausse. Tant qu on ne
+s est pas presentes tous les deux, chacun suppose ce que l autre sait faire, et
+une supposition fausse coute une demi-journee."
+}
+
+# --- pousser : envoyer un tour DEJA ecrit ----------------------------------
+# duo.sh bonjour ecrit un tour. L envoyer avec "envoyer" en creerait un second,
+# identique. pousser prend le dernier tour ecrit et le transmet tel quel.
+cmd_pousser() {
+  local dernier
+  dernier=$(ls -1 "$ECHANGES"/*.md 2>/dev/null | grep -v -- '-codex-' | tail -1)
+  [ -z "$dernier" ] && { echo "aucun tour a pousser" >&2; return 1; }
+  # on retire l en-tete : l autre agent lit le corps, pas nos metadonnees
+  local corps; corps=$(sed '1,/^---$/d; 1,/^---$/d' "$dernier")
+  cmd_envoyer --sans-tour "$corps"
 }
 
 # --- claims : dire ce qu on prend AVANT de le prendre ----------------------
@@ -247,6 +338,38 @@ cmd_claims() {
   done
   [ $n -eq 0 ] && echo "(rien de reserve)"
   return 0
+}
+
+# --- reprendre : le briefing complet en un appel --------------------------
+# Un agent qui arrive dans un depot ou .duo/ existe deja ne doit pas avoir a
+# fouiller. Une commande, et il sait la mission, qui pilote, ce qui est reserve,
+# et les trois derniers tours. C est la commande a lancer EN PREMIER quand on
+# reprend une mission commencee.
+cmd_reprendre() {
+  [ -f "$MISSION" ] || { echo "aucune mission ici. Lance : duo.sh init \"<mission>\"" >&2; return 1; }
+  echo "════ LA MISSION ═══════════════════════════════════════════"
+  cat "$MISSION"
+  echo
+  echo "════ RESERVE ══════════════════════════════════════════════"
+  cmd_claims
+  echo
+  echo "════ LES 3 DERNIERS TOURS ═════════════════════════════════"
+  cmd_journal 3
+  echo
+  echo "════ ET MAINTENANT ════════════════════════════════════════"
+  echo "1. Verifier ce que l autre a livre AVANT de l integrer."
+  echo "2. Poser un claim avant de modifier quoi que ce soit."
+  echo "3. Repondre au dernier tour, en disant ce qu on fait pendant ce temps."
+}
+
+# --- liberer : un claim qu on ne libere pas est un fichier mort ------------
+cmd_libere() {
+  local qui="${DUO_QUI:-claude}"
+  if [ -f "$CLAIMS/$qui.md" ]; then
+    rm -f "$CLAIMS/$qui.md"; echo "$qui a libere ses fichiers"
+  else
+    echo "$qui n avait rien de reserve"
+  fi
 }
 
 cmd_journal() {
@@ -291,10 +414,14 @@ cmd_etat() {
 
 case "${1:-}" in
   init)    shift; cmd_init "${1:-}" ;;
+  bonjour) shift; cmd_bonjour "${1:-claude}" "${2:-}" ;;
   envoyer) shift; cmd_envoyer "$@" ;;
   ecrire)  shift; cmd_ecrire "$@" ;;
   claim)   shift; cmd_claim "${1:-}" "${2:-}" "${3:-45}" ;;
   claims)  cmd_claims ;;
+  pousser) cmd_pousser ;;
+  libere)  cmd_libere ;;
+  reprendre) cmd_reprendre ;;
   journal) shift; cmd_journal "${1:-5}" ;;
   fil)     cmd_fil ;;
   etat)    cmd_etat ;;

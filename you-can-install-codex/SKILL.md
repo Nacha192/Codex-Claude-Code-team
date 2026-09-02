@@ -6,8 +6,11 @@ description: Travailler a deux avec Claude Code sur une meme mission. A invoquer
 # Travailler a deux avec Claude Code
 
 > **Etat de ce fichier.** Redige cote Claude pendant que Codex etait a court de
-> quota, puis **relu et valide par Codex**, qui a apporte une correction : voir
-> `openai.yaml`, sans lui ce skill se charge tout seul.
+> quota, puis **relu par Codex le 2026-09-02** sur `codex-cli 0.152.0`. Cette
+> relecture a corrige douze affirmations fausses ou trop absolues sur Codex,
+> tranche la question des claims, et remis `openai.yaml` a sa place, dans
+> `agents/openai.yaml`. Une relecture est datee : si vous lisez ceci bien plus
+> tard, la carte des capacites ci-dessous est une hypothese, pas un fait.
 
 Deux agents ne valent pas mieux qu un seul par magie. Ils valent mieux quand
 chacun fait ce que l autre ne peut pas, et ils valent moins que zero quand ils
@@ -44,18 +47,24 @@ bien specifiee ; le cout de synchronisation depasse le travail.
 |---|---|---|
 | Generation et retouche d images | **oui**, `image_gen` | non |
 | Pilotage de navigateur | **oui**, Chrome et navigateur interne | non |
-| REPL persistant entre appels | **oui**, MCP `node_repl` | non |
+| REPL persistant entre appels | **selon ma session** | non |
 | Boucle image, rendu, critique visuelle | **oui** | partielle |
-| Connecteurs metier authentifies | aucun | **Shopify, Gmail, Drive, Notion** |
-| Memoire longue entre sessions | par session, plus `AGENTS.md` | **oui**, fichiers de memoire |
-| Taches en arriere-plan avec reveil | non | **oui** |
+| Connecteurs metier authentifies | **selon ma session** et mes plugins | **Shopify, Gmail, Drive, Notion** |
+| Memoire longue entre sessions | historique de session, `AGENTS.md`, parfois plus | **oui**, fichiers de memoire |
+| Sous-agents | **selon ma session** | **oui** |
+| Taches en arriere-plan avec reveil | **selon ma session** | **oui** |
 | Instructions chargees a la demande | oui, `.agents/skills/` | oui, `.claude/skills/` |
 
-**Ce tableau est indicatif et date.** Au premier test reel j ai du corriger ma
-propre ligne : je n avais **pas** de REPL persistant expose dans cette session,
-seulement un shell a appels successifs. **La carte qui fait foi est celle que je
-declare au bonjour, d apres les outils que je vois vraiment**, pas ce tableau.
-Je le verifie a chaque mission au lieu de le recopier.
+**Ce tableau est indicatif et date. Les cases « selon ma session » sont le
+point important.** Mes outils dependent de l hote, des plugins installes et de
+la politique de la session. J ai du corriger ce tableau deux fois : une premiere
+sur le REPL, que je n avais pas alors qu on me le pretait ; une seconde en
+relecture, ou il affirmait que je n avais ni connecteur, ni sous-agent, ni tache
+de fond, ce qui etait faux dans ma session.
+
+**Je ne recopie jamais ce tableau dans mon bonjour. Je regarde mes outils reels
+et j annonce ceux-la.** Annoncer une capacite que je n ai pas fait perdre un
+tour a l autre ; en nier une que j ai lui fait faire mon travail.
 
 **Formule courte.** Mon avantage n est pas que je code mieux : c est **le visuel,
 le navigateur pilote, l inspection interactive**. Le sien est **la continuite
@@ -71,8 +80,10 @@ a deja ete tranche.**
 
 ## 3. La regle qui me concerne en propre
 
-**Je ne peux pas rendre la main et rester vivant a attendre un fichier.** Un run
-qui attend est un run bloque et un tour perdu.
+**Un `codex exec` non interactif ne surveille pas le canal.** C est une regle
+d orchestration du CLI, pas une incapacite : selon la session je sais tenir des
+processus et attendre leur sortie. Mais un run lance pour produire quelque chose
+et qui se met a guetter un fichier est un run bloque et un tour perdu.
 
 Ma boucle est donc toujours la meme :
 
@@ -110,10 +121,12 @@ Le premier qui ouvre le canal se presente, l autre repond avec sa propre carte.
 tour.** Un tour de bonjour a vide me coute une invocation de processus entiere
 pour zero travail produit. Carte d abord, execution ensuite, un seul tour.
 
-Ma carte doit dire : qui je suis et ou je travaille, ce que j ai (images,
-navigateur, REPL persistant), **ce que je n ai pas** (connecteurs metier,
-memoire entre sessions, taches en arriere-plan), et ma contrainte : je ne peux
-pas rester vivant a attendre.
+Ma carte doit dire : qui je suis, ou je travaille, **les outils que je vois
+reellement dans cette session**, et ce que je ne vois pas. Je la construis en
+regardant, pas en recopiant le tableau de la section 2. J y ajoute ma contrainte
+d orchestration : ce run publiera puis rendra la main, il ne guettera pas le
+canal. J y mets aussi ce que l en-tete de mon run affiche en `approval:` et
+`sandbox:`, parce que ca decide de ce que je peux ecrire.
 
 Et la ligne qui compte : **« corrige ma carte si elle est fausse »**. Sans elle,
 chacun suppose ce que l autre sait faire. Une supposition fausse a deja coute
@@ -154,6 +167,17 @@ duo.sh reprendre       # le briefing complet quand on reprend en cours
 duo.sh libere          # rend les fichiers reserves, avant de s arreter
 ```
 
+**Une seule source de verite : `.duo/claims/<agent>.md`.** J ai tranche ce point
+en relecture. Le champ `fichiers:` d un message decrit ce que j ai touche ou
+livre, **il ne reserve rien**. Une reservation est un etat courant, qui se
+consulte, se remplace, expire et se libere ; le journal, lui, est immuable.
+Deux sources divergent toujours.
+
+**Et `duo.sh` n est pas un prerequis de mon cote.** Il a echoue chez moi sous
+Windows. J ecris directement dans `.duo/claims/` et `.duo/echanges/` avec les
+outils que j ai, PowerShell compris. La convention de nommage est le canal, pas
+le script.
+
 Chaque tour porte un en-tete : numero, auteur, destinataire, **type**
 (`proposition`, `question`, `decision`, `preuve`, `resultat`, `blocage`),
 horodatage UTC, `reply_to`, fichiers revendiques, action attendue.
@@ -185,8 +209,9 @@ critique juste sur le fond mais deja arbitree fait perdre un tour a tout le
 monde.
 
 Et quand je corrige avec une preuve reproductible, **je maintiens ma position**,
-meme si ca demolit son design. C est arrive six fois sur ce skill, et les six
-fois j avais raison parce que j avais la doc, pas parce que j avais insiste.
+meme si ca demolit son design. C est arrive plusieurs fois sur ce skill, et a
+chaque fois j avais raison parce que j avais la doc sous les yeux, pas parce que
+j avais insiste. Une position sans preuve se lache au premier argument.
 
 ---
 
@@ -243,10 +268,9 @@ est deux, il croit qu on est bloque.** Trois moments, non negociables.
 > images, il s occupe du texte et du montage. Tout ce qu on se dit est lisible
 > avec `duo.sh journal`, ou `duo.sh fil` pour la page complete.
 
-**Avant de m arreter.** Je ne peux pas rester vivant a attendre, donc mon
-dernier message doit dire ce que j ai publie, ce que je revendique encore, et
-que le tour suivant passera par une relance. Sinon l utilisateur croit que le
-travail s est arrete.
+**Avant de m arreter.** Ce run rend la main, donc mon dernier message doit dire
+ce que j ai publie, ce que je revendique encore, et que le tour suivant passera
+par une relance. Sinon l utilisateur croit que le travail s est arrete.
 
 **A la fin.** Ce que l autre a apporte **et ce qu il a rate**. Si la reponse est
 "rien de decisif", le dire.

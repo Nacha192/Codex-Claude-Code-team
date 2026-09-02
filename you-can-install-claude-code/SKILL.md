@@ -55,20 +55,24 @@ Le duo ne sert a rien tant que les deux ne savent pas ou est la frontiere.
 |---|---|---|
 | Generation et retouche d images | **non** | **oui**, `image_gen`, avec references locales |
 | Pilotage de navigateur | non | **oui**, Chrome et navigateur interne |
-| REPL persistant reutilisable entre appels | non | **oui**, MCP `node_repl` |
+| REPL persistant reutilisable entre appels | non | **selon la session** |
 | Inspection visuelle d images locales | oui | **oui**, en boucle image, rendu, critique |
-| Taches en arriere-plan, reveil a la fin | **oui** | non : un run finit, il ne reste pas vivant |
-| Sous-agents | **oui** | des deux cotes, mieux integre cote Claude |
-| Connecteurs metier authentifies | **Shopify, Gmail, Drive, Notion** | aucun |
+| Taches en arriere-plan, reveil a la fin | **oui** | selon la session ; un `codex exec` non interactif, lui, finit et rend la main |
+| Sous-agents | **oui** | **selon la session**, il en expose parfois |
+| Connecteurs metier authentifies | **Shopify, Gmail, Drive, Notion** | selon la session et les plugins |
 | Memoire longue entre sessions | **oui**, fichiers de memoire | par session, plus `AGENTS.md` |
 | Instructions chargees a la demande | oui, `.claude/skills/` | oui aussi, `.agents/skills/` |
 | Shell, git, tests, rendu HTML vers PNG | oui | oui |
 
-**Ce tableau est indicatif et date.** Il vieillit : lors du premier test reel,
-Codex a corrige sa propre ligne, il n avait **pas** de REPL persistant expose
-dans cette session-la, seulement un shell a appels successifs. **La carte qui
-fait foi est celle que chacun declare au bonjour, d apres les outils qu il voit
-reellement dans sa session**, pas ce tableau.
+**Ce tableau est indicatif et date, et les colonnes marquees « selon la
+session » ne sont pas une coquetterie.** Les outils de Codex dependent de
+l hote, des plugins installes et de la politique de la session. Il a corrige ce
+tableau deux fois : une premiere sur le REPL, absent de sa session alors qu on
+l annoncait acquis ; une seconde en relecture, ou il a montre qu ecrire
+« aucun connecteur, aucun sous-agent, aucune tache de fond » etait faux chez
+lui. **Une case de ce tableau est une hypothese. La carte qui fait foi est celle
+que chacun declare au bonjour, d apres les outils qu il voit reellement.**
+Ne jamais dire a l autre ce qu il sait faire : lui demander.
 
 **Formule courte.** Son avantage n est pas qu il code mieux : c est **le visuel,
 le navigateur pilote, l inspection interactive et la boucle image, rendu,
@@ -160,8 +164,15 @@ duo.sh claims        # avant de toucher un fichier, on regarde
 ```
 
 Une reservation porte les fichiers, l objectif, et une **expiration**. Sans
-expiration, un agent qui meurt bloque un fichier pour toujours. C est la piece
-qui empeche concretement les deux de refaire le meme travail.
+expiration, un agent qui rend la main bloque un fichier pour toujours. C est la
+piece qui empeche concretement les deux de refaire le meme travail.
+
+**Une seule source de verite : `.duo/claims/<agent>.md`.** Le champ `fichiers:`
+qui apparait dans l en-tete d un message est une **trace descriptive** de ce
+qu on a touche ou livre. **Il ne reserve rien.** Tranche par Codex en relecture,
+et l argument est bon : une reservation est un etat courant, qui se consulte, se
+remplace, expire et se libere, alors que le journal est immuable. Mettre le
+claim aux deux endroits garantit qu ils divergeront.
 
 ---
 
@@ -214,8 +225,10 @@ agent peut respecter en ecrivant un fichier a la main :
 .duo/echanges/NNNN-<auteur>-<type>.md
 ```
 
-avec un en-tete `n / de / a / type / utc`, et le reste en markdown. Un agent qui
-ne peut pas lancer le script ecrit le fichier lui-meme. **Ne jamais laisser un
+avec un en-tete `n / de / a / type / utc`, un `fichiers:` optionnel qui **decrit
+sans reserver**, et le reste en markdown. Un agent qui ne peut pas lancer le
+script ecrit le fichier lui-meme, et pose son claim en ecrivant
+`.duo/claims/<agent>.md`. **Ne jamais laisser un
 echec de script bloquer un echange.**
 
 Et quand un envoi echoue mais que la reponse existe ailleurs (sortie standard,
@@ -250,7 +263,8 @@ Donc, systematiquement :
    les yeux fermes.
 
 Et l inverse est vrai : quand il corrige avec une preuve, **il gagne**, meme si
-ca demolit le design. C est arrive six fois sur ce skill.
+ca demolit le design. C est arrive plusieurs fois en ecrivant ce skill, et a
+chaque fois la correction valait mieux que la version initiale.
 
 ---
 

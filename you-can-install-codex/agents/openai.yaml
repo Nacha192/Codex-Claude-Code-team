@@ -1,0 +1,5 @@
+interface:
+  display_name: "Duo Claude Code x Codex"
+  short_description: "Protocole de travail a deux entre Codex et Claude Code, via un canal de fichiers."
+policy:
+  allow_implicit_invocation: false

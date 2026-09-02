@@ -8,14 +8,21 @@ sert a decider, revalidez-le.
 
 ## Ou est le binaire
 
-Il n est **pas dans le PATH**. Trois endroits ou le chercher, dans cet ordre :
+**Il peut etre dans le PATH.** Une installation npm y depose un shim `codex`.
+Verifie le 2026-09-02 sur cette machine : `command -v codex` resolvait
+`.../scoop/apps/nodejs/current/bin/codex`. La fiche affirmait l inverse, c etait
+faux, et c est Codex qui l a releve.
 
-1. la variable `CODEX_BIN` si elle est posee ;
-2. la cle `CODEX_CLI_PATH` dans `~/.codex/config.toml` ;
-3. `~/AppData/Local/OpenAI/Codex/bin/<hash>/codex.exe`.
+Ordre de recherche, du plus fiable au plus fragile :
 
-Le hash du dossier change a chaque mise a jour : **ne jamais coder un chemin en
-dur**. `duo.sh` fait cette recherche.
+1. la variable `CODEX_BIN`, si elle est posee ;
+2. `command -v codex` ;
+3. la cle `CODEX_CLI_PATH` dans `~/.codex/config.toml` ;
+4. `~/AppData/Local/OpenAI/Codex/bin/<hash>/codex.exe`.
+
+Le hash change a chaque mise a jour et **plusieurs versions coexistent** : le
+glob peut donc tomber sur une ancienne. Il est en dernier pour cette raison.
+**Ne jamais coder un chemin en dur.** `duo.sh` fait cette recherche.
 
 ---
 
@@ -31,9 +38,11 @@ codex exec resume --last -o <fichier> "<prompt>"
 - `-o` ecrit la reponse dans un fichier. **A utiliser systematiquement** : la
   sortie standard est bruitee, le fichier ne l est pas.
 
-**Piege confirme :** `resume` **refuse** `-C` et `-s`. Il herite du repertoire
-et du sandbox de la session reprise. Il faut faire un `cd` avant, pas passer
-l option. C est la premiere erreur commise en montant ce canal.
+**Piege confirme, avec une correction.** `codex exec resume --help` ne declare
+ni `-C` ni `-s` : les passer echoue. Il faut faire un `cd` avant. En revanche,
+**ce que `resume` herite exactement du sandbox d origine n est documente nulle
+part** : la version precedente de cette fiche l affirmait, sans preuve. Si le
+sandbox compte pour ce que vous faites, verifiez-le, ne le supposez pas.
 
 ---
 
@@ -55,6 +64,21 @@ la tache correspond ou quand il est invoque. Emplacements :
 
 - depot : `.agents/skills/<nom>/SKILL.md`
 - utilisateur : `~/.codex/skills/<nom>/SKILL.md`
+
+**`openai.yaml` va dans `<skill>/agents/openai.yaml`, pas a la racine du
+skill.** Verifie sur les skills livres par OpenAI, tous le placent la. Sa forme :
+
+```yaml
+interface:
+  display_name: "Nom lisible"
+  short_description: "Une phrase."
+policy:
+  allow_implicit_invocation: false
+```
+
+`allow_implicit_invocation: false` **interdit a Codex d invoquer le skill de sa
+propre initiative**. Ce n est pas un interrupteur qui empecherait un chargement
+autrement inevitable, c est une autorisation qu on retire.
 
 C est **l erreur de conception la plus couteuse a eviter** : croire que Codex n a
 que des instructions permanentes. Il a la meme divulgation progressive que nous.
@@ -91,27 +115,40 @@ cours.** Chaque echange est une nouvelle invocation de processus qui peut
 reprendre la meme session. Un agent toujours vivant demanderait le Codex App
 Server ou le SDK, une architecture plus lourde.
 
-Consequence directe sur le protocole : **on ne demande jamais a Codex
-d attendre.** Il finit, il publie, il meurt, et l orchestrateur le relance.
+**Attention a la portee de cette phrase.** C est une regle d orchestration du
+CLI, **pas une incapacite de Codex**. Codex leve la nuance lui-meme : selon la
+session, il sait conserver des processus, attendre leur sortie et utiliser des
+outils differes. Ce qui est vrai, c est qu un `codex exec` non interactif ne
+doit pas surveiller le canal indefiniment.
+
+Consequence sur le protocole : **on ne demande pas a un `codex exec` d attendre.**
+Il finit, il publie, il rend la main, et l orchestrateur le relance.
 
 ---
 
 ## Ses outils
 
-Lus dans `config.toml` :
+**Cette liste est indicative et datee. Elle ne fait pas foi.** Les outils
+exposes dependent de l hote, des plugins installes et de la politique de la
+session. Codex a constate lui-meme, le 2026-09-02, qu un outil que cette fiche
+donnait pour acquis (`node_repl`) n etait pas expose dans sa session.
+
+**La seule carte qui fait foi est celle que le run declare au bonjour.**
+Demandez-la, ne la deduisez pas d ici.
+
+Observe au moins une fois :
 
 - `image_gen` : generation d images. **C est la capacite qui justifie le duo**
-  la plupart du temps.
-- MCP `node_repl` : un REPL Node persistant.
-- Pilotage de Chrome et d un navigateur interne.
-- `computer-use`.
-- Les images produites atterrissent dans `~/.codex/generated_images/`.
+  la plupart du temps. Les images atterrissent dans `~/.codex/generated_images/`.
+- Pilotage de Chrome et d un navigateur interne, `computer-use`.
+- Des connecteurs, des sous-agents et des taches de fond, **selon la session**.
+  Ne pas ecrire qu il n en a pas.
 
 ---
 
 ## Ce qu il fait mieux, honnetement
 
-Constate sur une refonte de creatives publicitaires reelle, pas suppose :
+Constate sur la refonte des creatives un projet de demonstration, pas suppose :
 
 - **Il genere des images utilisables, et il sait pourquoi elles marchent.**
   Interroge sur ce qu il ajoutait pour casser le rendu IA, il a repondu qu il ne
@@ -148,17 +185,33 @@ Trois observees ici, quatre decrites par lui.
   conversations longues. **Ne pas inscrire une taille fixe dans le protocole.**
 - **Quota** : depend du compte et du modele, consultable avec `/status`, non
   stable. Observe deux fois pendant la mise au point de ce skill.
-- **Sandbox** : generalement `workspace-write` avec approbation `on-request`,
-  reseau restreint, pas d escalade interactive depuis un run non interactif.
-- **Ecriture hors des racines autorisees** : impossible sans permission. Un run
-  sandboxe ne peut pas forcement ecrire dans `~/.codex`.
+- **Sandbox et approbations** : imposes par la session, pas par une regle
+  generale. Ils sont imprimes dans l en-tete du run (`approval:`, `sandbox:`).
+  Observe ici : `workspace-write [workdir, /tmp, $TMPDIR]`, approbation `never`.
+- **Ecriture hors des racines autorisees** : impossible. **Une autorisation
+  ecrite dans le prompt ne rend pas un montage lecture seule inscriptible** :
+  constate pendant cette relecture, Codex avait la consigne de modifier
+  `.agents/skills/` et s est fait refuser l acces. Si l autre agent doit ecrire
+  quelque part, verifiez que la racine est ouverte, ne lui faites pas confiance
+  sur parole.
 
 ---
 
-## Reste a confirmer
+## Etat de la relecture
 
-- Ou vit exactement le CLAIM : un fichier `claims/` separe, un champ dans
-  l en-tete de message, ou les deux. `duo.sh` fait les deux en attendant sa
-  reponse, il a atteint son quota avant de trancher.
-- La version Codex du skill, dans `.agents/skills/duo-claude-codex/`, a ete
-  redigee de ce cote-ci faute de quota. **Elle doit etre relue par lui.**
+**Relu par Codex le 2026-09-02**, sur `codex-cli 0.152.0`. Il a releve douze
+affirmations fausses ou trop absolues dans cette fiche. Toutes ont ete
+corrigees ci-dessus, apres verification de ce qui etait verifiable ici : le
+PATH, la sortie de `resume --help`, l en-tete du run, et l emplacement de
+`openai.yaml` dans les skills livres par OpenAI.
+
+**Le CLAIM est tranche** : la seule reservation est
+`.duo/claims/<agent>.md`. Le champ `fichiers:` d un message est une trace
+descriptive de ce qui a ete touche, **il ne reserve rien**. Raison donnee par
+Codex, et elle est bonne : une reservation est un etat courant, qui se consulte,
+se remplace, expire et se libere ; le journal, lui, est immuable. Deux sources
+divergent toujours.
+
+**Ce qui reste ouvert :** rien de bloquant. La regle a retenir est que cette
+fiche vieillit. Une capacite lue ici est une hypothese, celle declaree au
+bonjour est un fait.
