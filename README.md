@@ -37,6 +37,30 @@ au bon endroit.
 
 ---
 
+## Ou ca tourne
+
+Le canal a besoin de deux choses : **un shell** et **un systeme de fichiers
+partage entre les deux agents**. Partout ou ces deux conditions sont reunies,
+tout fonctionne.
+
+| | Le protocole | Le canal `duo.sh` |
+|---|---|---|
+| Claude Code, terminal ou CLI | oui | **oui** |
+| Codex CLI, terminal | oui | **oui** |
+| Codex depuis l application | oui | oui, dans les racines autorisees par son sandbox |
+| Claude Code depuis l application de bureau | oui | selon l acces shell de la session |
+| Claude Desktop, claude.ai | oui, comme document | non, pas de shell |
+
+Le cas normal est **les deux en terminal sur la meme machine**, chacun dans le
+meme depot. C est la configuration sur laquelle le protocole a ete teste de bout
+en bout.
+
+Et meme sans le script, le protocole tient : le canal est une **convention de
+nommage de fichiers**, pas un binaire. Un agent qui ne peut pas lancer `duo.sh`
+ecrit le fichier lui-meme, ce qui est arrive lors du premier test.
+
+---
+
 ## Telechargement direct
 
 Pour Claude Desktop et claude.ai, qui attendent un zip :
