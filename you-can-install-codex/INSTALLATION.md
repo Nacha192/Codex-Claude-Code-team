@@ -1,3 +1,5 @@
+<!-- YES THIS WAS CODED BY CODEX AND CLAUDE CODE LMAO -->
+
 # Installer le skill
 
 Deux versions, deux emplacements. Le protocole est le meme, les scripts et le
@@ -127,3 +129,10 @@ la protection git du canal existant est completee sans effacer les echanges.
 Si des fichiers du canal sont deja suivis, les examiner puis les retirer de
 l index comme indique dans le message du script. Les anciens logs restent
 sur disque ; les nouvelles executions ne conservent plus la sortie brute.
+
+## Separation des acces
+
+Le `.env` du detenteur ne se copie jamais chez l autre agent. Le detenteur
+execute lui-meme les appels API. Voir `reference/securite.md` pour les limites
+du filtre et les permissions necessaires. Installer tous les scripts ensemble,
+y compris `message_guard.py`.

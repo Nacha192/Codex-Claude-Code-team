@@ -37,6 +37,7 @@
 #             DUO_RACINE, CODEX_BIN, NO_COLOR.
 #
 # Codes de sortie : 0 ok, 1 usage, 2 Codex introuvable, 3 Codex a echoue.
+# Code 4 : controle de securite refuse, ne pas contourner.
 # Le 3 compte : l appelant doit pouvoir continuer sans lui.
 #
 # Deux choix de conception, tous deux issus d une erreur reelle :
@@ -58,6 +59,11 @@ ETAT="$DUO/etat.json"
 
 PY=$(command -v python || command -v python3 || echo python)
 SCRIPTS=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+
+# Tous les champs transmis sont controles avant ecriture et avant envoi.
+verifier_texte() {
+  printf '%s\0' "$@" | "$PY" "$SCRIPTS/message_guard.py" check
+}
 
 # Codex PEUT etre dans le PATH (installation npm : un shim `codex` y atterrit),
 # mais ce n est pas garanti. Le dossier d installation, lui, contient un hash
@@ -180,6 +186,7 @@ reserver_numero() {
 }
 
 cmd_init() {
+  verifier_texte "${1:-}" || return 4
   mkdir -p "$ECHANGES" "$CLAIMS"
   local intitule="${1:-}"
   if [ ! -f "$MISSION" ]; then
@@ -236,6 +243,7 @@ lire_options() {
       --fichiers) FICHIERS="$2"; shift 2 ;;
       --reply)    REPLY="$2"; shift 2 ;;
       --attendu)  ATTENDU="$2"; shift 2 ;;
+      --) shift; break ;;
       --sans-tour) SANS_TOUR=1; shift ;;
       *) break ;;
     esac
@@ -247,6 +255,7 @@ lire_options() {
 
 ecrire_tour() {
   local corps="$1" n f tmp
+  verifier_texte "$corps" "$FICHIERS" "$REPLY" "$ATTENDU" || return 4
   mkdir -p "$ECHANGES"
   n=$(reserver_numero) || return 1
   f="$ECHANGES/$n-$DE-$TYPE.md"
@@ -284,6 +293,15 @@ cmd_envoyer() {
   lire_options "$@" || return 1
   [ -z "$RESTE" ] && { echo "usage: duo.sh envoyer [options] \"message\"" >&2; return 1; }
 
+  [ "$DE:$A" = "claude:codex" ] || {
+    echo "duo: envoyer appelle seulement Codex depuis Claude ; utiliser ecrire pour repondre." >&2; return 1; }
+  verifier_texte "$RESTE" "$FICHIERS" "$REPLY" "$ATTENDU" || return 4
+  local sid; sid=$(etat_lire session_codex)
+  if [ -n "$sid" ] && [[ ! "$sid" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+    echo "duo: identifiant de session invalide, envoi refuse." >&2; return 4
+  fi
+  local prompt
+  prompt=$(printf '%s' "$RESTE" | "$PY" "$SCRIPTS/message_guard.py" envelope) || return 4
   local codex; codex=$(trouver_codex) || {
     echo "codex introuvable. Pose CODEX_BIN=/chemin/vers/codex.exe" >&2; return 2; }
 
@@ -292,7 +310,6 @@ cmd_envoyer() {
     envoye=$(ecrire_tour "$RESTE") || {
       echo "duo: le tour n a pas pu etre ecrit, on n appelle pas Codex." >&2; return 1; }
   fi
-  local sid; sid=$(etat_lire session_codex)
   TYPE="reponse"; DE="codex"; A="claude"; FICHIERS=""; ATTENDU=""
   # Le numero de la reponse se RESERVE lui aussi : sinon la course revenait par
   # la porte de derriere, la moitie corrigee seulement.
@@ -309,11 +326,11 @@ cmd_envoyer() {
   local log="$DUO/.run-$n.log"
   local codes
   if [ -n "$sid" ]; then
-    ( cd "$RACINE" && "$codex" exec resume "$sid" -o "$brouillon" "$RESTE" ) 2>&1 |
+    ( cd "$RACINE" && "$codex" exec resume "$sid" -o "$brouillon" - <<< "$prompt" ) 2>&1 |
       "$PY" "$SCRIPTS/run_metadata.py" >"$log"
     codes=("${PIPESTATUS[@]}")
   else
-    "$codex" exec -C "$RACINE" -s workspace-write -o "$brouillon" "$RESTE" 2>&1 |
+    "$codex" exec -C "$RACINE" -s workspace-write -o "$brouillon" - <<< "$prompt" 2>&1 |
       "$PY" "$SCRIPTS/run_metadata.py" >"$log"
     codes=("${PIPESTATUS[@]}")
   fi
@@ -335,6 +352,14 @@ cmd_envoyer() {
       etat_ecrire session_codex "$trouve"
     else
       echo "duo: session id introuvable dans le log, le prochain envoi ouvrira une nouvelle session" >&2
+    fi
+  fi
+
+  if [ $code -eq 0 ] && [ -s "$brouillon" ]; then
+    if ! "$PY" "$SCRIPTS/message_guard.py" file "$brouillon"; then
+      rm -f "$brouillon"
+      echo "duo: reponse refusee avant publication dans le fil." >&2
+      return 4
     fi
   fi
 
@@ -436,6 +461,8 @@ cmd_pousser() {
   # Codex poussait le message de Claude a sa place.
   local moi dernier
   moi="${DUO_QUI:-claude}"
+  [ "$moi" = "claude" ] || {
+    echo "duo: pousser appelle Codex ; Codex doit repondre avec ecrire." >&2; return 1; }
   dernier=$(ls -1 "$ECHANGES"/*.md 2>/dev/null | grep -- "-$moi-" | tail -1)
   [ -z "$dernier" ] && { echo "aucun tour a pousser" >&2; return 1; }
   # On retire l en-tete : l autre agent lit le corps, pas nos metadonnees.
@@ -468,6 +495,7 @@ fi
 # presentation, sinon les deux divergent.
 afficher_tour() {
   local f="$1" nom base coul qui ligne dans_entete=1
+  "$PY" "$SCRIPTS/message_guard.py" file "$f" || return 4
   base=$(basename "$f" .md)
   case "$base" in *-codex-*) coul="$COUL_CODEX"; qui=CODEX ;; *) coul="$COUL_CLAUDE"; qui=CLAUDE ;; esac
   local n type utc
@@ -506,7 +534,7 @@ cmd_suivre() {
       base=$(basename "$f")
       case "$vus" in *"|$base|"*) continue ;; esac
       vus="$vus|$base|"
-      afficher_tour "$f"
+      afficher_tour "$f" || return $?
     done
     sleep 2
   done
@@ -533,6 +561,8 @@ cmd_claim() {
   local fichiers="${1:-}" but="${2:-}" min="${3:-45}" qui
   qui=$(qui_suis_je) || return 1
   [ -z "$fichiers" ] && { echo "usage: duo.sh claim \"a.js b.md\" \"objectif\" [minutes]" >&2; return 1; }
+  verifier_texte "$fichiers" "$but" || return 4
+  [[ "$min" =~ ^[1-9][0-9]*$ ]] || { echo "duo: duree invalide" >&2; return 1; }
   mkdir -p "$CLAIMS"
   local f="$CLAIMS/$qui.md" tmp="$CLAIMS/$qui.$$-${RANDOM:-0}.partiel"
   {
@@ -541,9 +571,9 @@ cmd_claim() {
     echo "- expire dans : $min min"
     echo "- objectif : $but"
     echo "- fichiers :"
-    for x in $fichiers; do echo "  - $x"; done
+    printf "  - %s\n" "$fichiers"
   } > "$tmp"
-  mv -f "$tmp" "$f"
+  mv -f "$tmp" "$f" || return 1
   echo "$f"
 }
 
@@ -645,7 +675,7 @@ cmd_fil() {
     for f in "$ECHANGES"/*.md; do
       [ -e "$f" ] || continue
       case "$(basename "$f")" in *-codex-*) k=codex ;; *) k=claude ;; esac
-      echo "<article class=\"$k\"><h3>$(basename "$f" .md)</h3>"
+      echo "<article class=\"$k\"><h3>$(basename "$f" .md | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')</h3>"
       sed 's/&/\&amp;/g; s/</\&lt;/g' "$f"
       echo '</article>'
     done
@@ -665,6 +695,15 @@ cmd_etat() {
   echo "── reserve"
   cmd_claims
 }
+
+case "${1:-}" in
+  init|bonjour|envoyer|ecrire|claim|pousser|libere|fil|claims|reprendre|journal|suivre|etat)
+    "$PY" "$SCRIPTS/message_guard.py" layout "$DUO" || exit 4 ;;
+esac
+case "${1:-}" in
+  envoyer|pousser|fil|claims|reprendre|journal|suivre|etat)
+    "$PY" "$SCRIPTS/message_guard.py" channel "$DUO" || exit 4 ;;
+esac
 
 case "${1:-}" in
   init|bonjour|envoyer|ecrire|claim|pousser|libere|fil)

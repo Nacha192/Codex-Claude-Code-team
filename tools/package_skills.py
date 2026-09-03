@@ -3,8 +3,8 @@ from pathlib import Path
 from zipfile import ZipFile, ZipInfo, ZIP_DEFLATED
 
 ROOT = Path(__file__).resolve().parents[1]
-COMMON = ['INSTALLATION.md', 'SKILL.md', 'reference/protocole.md',
-          'scripts/attendre.ps1', 'scripts/duo.sh', 'scripts/run_metadata.py']
+COMMON = ['INSTALLATION.md', 'SKILL.md', 'reference/protocole.md', 'reference/securite.md',
+          'scripts/attendre.ps1', 'scripts/duo.sh', 'scripts/run_metadata.py', 'scripts/message_guard.py']
 
 def build():
     for side in ('claude-code', 'codex'):

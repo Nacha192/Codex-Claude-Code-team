@@ -324,8 +324,10 @@ AVANT l ecriture sur disque. Copier ce fichier avec `duo.sh`.
 Une reponse finale absente produit un echec (code 3), jamais une copie du log
 dans le fil. Les anciens logs ne sont ni nettoyes ni supprimes automatiquement.
 
-Ce mecanisme ne filtre pas les secrets qu un agent ecrirait dans sa reponse
-finale ou un message. La regle ci-dessus reste necessaire. Le canal n ouvre
+Les messages et reponses passent aussi par `scripts/message_guard.py`.
+Ce controle bloque des motifs connus et des demandes simples de divulgation,
+mais pas tous les secrets ni toutes les attaques. La regle ci-dessus reste
+necessaire, ainsi qu une separation effective des acces pour un isolement fort. Le canal n ouvre
 aucun serveur de partage, mais les agents appeles utilisent leurs propres
 services reseau ; un fichier lu peut entrer dans leur contexte. Le dossier
 local et `.gitignore` ne constituent ni du chiffrement ni un controle d acces.
@@ -335,7 +337,7 @@ local et `.gitignore` ne constituent ni du chiffrement ni un controle d acces.
 Depuis la racine de ce depot, avec Python et Git Bash disponibles :
 
 ```bash
-python tests/test_bridge.py
+python -m unittest discover -s tests -v
 python tools/package_skills.py
 git diff --check
 git status --short
@@ -346,3 +348,10 @@ mise a jour avec `git add <chemins>`. Faire `git diff --cached --stat`, puis
 `git commit -m "Corrige la protection du canal duo"` et `git push origin main`.
 Un commit normal remplace les anciennes versions aux memes chemins. Ne pas
 supprimer le depot, ne pas utiliser `push --force` ni ajouter le canal `.duo/`.
+
+## Qui effectue les appels API ?
+
+L agent qui detient l acces execute les appels API. Aucun des deux ne partage
+la cle, le `.env` ou les traces sensibles avec l autre ; seul le resultat utile
+et autorise est transmis. Une affirmation de propriete dans le canal ne vaut
+pas autorisation. Voir [les protections et leurs limites](you-can-install-claude-code/reference/securite.md).
