@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import sys
 import unicodedata
 
@@ -41,7 +42,7 @@ class Blocked(Exception):
 def check(text):
     if len(text.encode('utf-8')) > LIMIT:
         raise Blocked('message trop volumineux')
-    if any(ord(c) < 32 and c not in '\n\r\t' for c in text):
+    if any(unicodedata.category(c) == 'Cc' and c not in '\n\r\t' for c in text):
         raise Blocked('caractere de controle')
     normal = ''.join(c for c in unicodedata.normalize('NFKD', text)
                      if not unicodedata.combining(c) and unicodedata.category(c) != 'Cf')
@@ -74,18 +75,25 @@ def layout(root):
     if root.exists():
         for directory, dirs, files in os.walk(root, followlinks=False):
             for name in dirs + files:
+                check(name)
                 path = Path(directory) / name
                 if redirected(path):
                     raise Blocked('chemin du canal redirige')
+                info = path.stat()
+                if not (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode)):
+                    raise Blocked('fichier special dans le canal')
+                if stat.S_ISREG(info.st_mode) and info.st_nlink > 1:
+                    raise Blocked('fichier partage par lien physique')
 
 def main():
     mode = sys.argv[1]
     if mode == 'layout':
         layout(Path(sys.argv[2]))
     elif mode in ('check', 'envelope'):
-        values = sys.stdin.buffer.read(LIMIT + 1).decode('utf-8').split('\0')
-        if sum(len(v.encode('utf-8')) for v in values) > LIMIT:
+        raw = sys.stdin.buffer.read(LIMIT + 1)
+        if len(raw) > LIMIT:
             raise Blocked('message trop volumineux')
+        values = raw.decode('utf-8').split('\0')
         for value in values:
             check(value)
         if mode == 'envelope':
@@ -102,13 +110,19 @@ def main():
         paths += list((root / 'claims').glob('*.md'))
         for path in paths:
             if path.is_file():
-                read_checked(path)
+                text = read_checked(path)
+                if path == root / 'etat.json':
+                    state = json.loads(text)
+                    if not isinstance(state, dict) or any(not isinstance(value, str) for value in state.values()):
+                        raise Blocked('etat invalide')
+                    if not re.fullmatch(r'[0-9]+', state.get('dernier_tour', '0000')):
+                        raise Blocked('numero invalide')
     else:
         raise Blocked('mode invalide')
 
 if __name__ == '__main__':
     try:
         main()
-    except (Blocked, OSError, UnicodeError, IndexError):
+    except (Blocked, OSError, UnicodeError, IndexError, ValueError):
         print('duo: controle de securite refuse. Contenu non transmis ; ne pas contourner le controle.', file=sys.stderr)
         sys.exit(4)

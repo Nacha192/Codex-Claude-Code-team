@@ -7,7 +7,15 @@ un pour chacun, meme regles, chacun avec ses contraintes propres.
 Deux agents ne valent pas mieux qu un seul par magie. Ils valent mieux quand
 chacun fait ce que l autre ne peut pas, et ils valent moins que zero quand ils
 se repassent la meme tache en se felicitant. Ce depot sert a obtenir le premier
-cas et a rendre le second difficile.
+cas et a reduire ce risque de coordination.
+
+## Security boundary
+
+This is a coordination tool, not a sandbox or a credential vault. Each agent
+keeps its own API access and performs the authenticated step itself. Exchange
+only the necessary, reviewed result. The message filter is a best-effort check;
+it cannot stop an agent that can read secrets and use other tools to send them.
+Keep credentials outside shared files and enforce access boundaries in the host.
 
 ## Installation, en 30 secondes
 

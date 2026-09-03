@@ -19,6 +19,9 @@ par les commandes du bridge. Il bloque certains formats de secrets, les
 affectations sensibles et les demandes simples de divulgation en francais et
 en anglais. Il rejette aussi les caracteres de controle et les chemins du canal
 rediriges par des liens symboliques ou jonctions detectables sur l hote.
+Les liens physiques et fichiers speciaux sont egalement refuses. Les champs
+de metadonnees ne peuvent pas injecter de nouvelles lignes dans l en-tete ;
+un etat JSON invalide bloque la reprise au lieu de lancer une nouvelle session.
 
 Un refus produit le code 4, sans afficher le texte rejete. Une reponse refusee
 n est pas publiee et son brouillon est supprime. Les messages deja poses a la

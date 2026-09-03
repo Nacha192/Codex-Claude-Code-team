@@ -50,6 +50,7 @@ set -uo pipefail
 umask 077
 
 RACINE="${DUO_RACINE:-$PWD}"
+RACINE=$(cd -- "$RACINE" && pwd) || exit 1
 DUO="$RACINE/.duo"
 ECHANGES="$DUO/echanges"
 CLAIMS="$DUO/claims"
@@ -71,7 +72,10 @@ verifier_texte() {
 # ne jamais coder le chemin en dur, et garder le glob en DERNIER recours.
 # Verifie le 2026-09-02 par Codex : `command -v codex` resolvait bien.
 trouver_codex() {
-  if [ -n "${CODEX_BIN:-}" ] && [ -x "$CODEX_BIN" ]; then echo "$CODEX_BIN"; return 0; fi
+  if [ -n "${CODEX_BIN:-}" ]; then
+    [ -x "$CODEX_BIN" ] || return 1
+    echo "$CODEX_BIN"; return 0
+  fi
   if command -v codex >/dev/null 2>&1; then command -v codex; return 0; fi
   local c
   c=$(grep -o "CODEX_CLI_PATH = '[^']*'" "$HOME/.codex/config.toml" 2>/dev/null \
@@ -115,7 +119,7 @@ etat_lire() {
   [ -f "$ETAT" ] || { echo ""; return 0; }
   "$PY" -c "import json,sys
 try: print(json.load(open(sys.argv[1],encoding='utf-8')).get(sys.argv[2],''))
-except Exception: print('')" "$ETAT" "$1" 2>/dev/null
+except Exception: sys.exit(1)" "$ETAT" "$1" 2>/dev/null
 }
 
 # Lecture, modification, ecriture : deux appels simultanes se perdaient une
@@ -140,9 +144,15 @@ try:
     if os.path.exists(p):
         try: d = json.load(open(p, encoding="utf-8"))
         except Exception: sys.exit("duo: etat.json illisible, aucune modification")
-    if k == "dernier_tour":
-        v = f"{max(int(d.get(k, 0)), int(v)):04d}"
-    d[k] = v
+    if k == "__init__":
+        defaults = {'mission': v, 'pilote': '', 'session_codex': '',
+                    'dernier_tour': '0000', 'statut': 'ouverte'}
+        for name, value in defaults.items():
+            d.setdefault(name, value)
+    else:
+        if k == "dernier_tour":
+            v = f"{max(int(d.get(k, 0)), int(v)):04d}"
+        d[k] = v
     fd, tmp = tempfile.mkstemp(dir=os.path.dirname(p) or ".")
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         json.dump(d, f, ensure_ascii=False, indent=2)
@@ -169,14 +179,14 @@ PYEOF
 # atomique partout, Windows compris.
 prochain_numero() {
   local n
-  n=$( { ls -1 "$ECHANGES" 2>/dev/null | sed -n 's/^\([0-9]\{4\}\)-.*/\1/p'
+  n=$( { ls -1 "$ECHANGES" 2>/dev/null | sed -n 's/^\([0-9]\{4,\}\)-.*/\1/p'
          ls -1 "$NUMEROS"  2>/dev/null ; } | sort -n | tail -1 )
   printf '%04d' $(( 10#${n:-0} + 1 ))
 }
 
 reserver_numero() {
   local n t=0
-  mkdir -p "$NUMEROS"
+  mkdir -p "$NUMEROS" || return 1
   while :; do
     n=$(prochain_numero)
     if mkdir "$NUMEROS/$n" 2>/dev/null; then printf '%s' "$n"; return 0; fi
@@ -187,7 +197,7 @@ reserver_numero() {
 
 cmd_init() {
   verifier_texte "${1:-}" || return 4
-  mkdir -p "$ECHANGES" "$CLAIMS"
+  mkdir -p "$ECHANGES" "$CLAIMS" || return 1
   local intitule="${1:-}"
   if [ ! -f "$MISSION" ]; then
     cat > "$MISSION" <<EOF
@@ -217,7 +227,7 @@ ${intitule:-(une phrase, pas un paragraphe)}
 EOF
     echo "cree : $MISSION"
   fi
-  [ -f "$ETAT" ] || "$PY" -c "import json,sys;json.dump({'mission':sys.argv[1],'pilote':'','session_codex':'','dernier_tour':'0000','statut':'ouverte'},open(sys.argv[2],'w',encoding='utf-8'),ensure_ascii=False,indent=2)" "${intitule:-sans titre}" "$ETAT"
+  etat_ecrire __init__ "${intitule:-sans titre}" || return 1
   echo "canal pret dans $DUO"
 }
 
@@ -231,6 +241,7 @@ besoin_valeur() {
 }
 
 lire_options() {
+  local destinataire_explicite=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --type|--de|--a|--fichiers|--reply|--attendu)
@@ -239,7 +250,7 @@ lire_options() {
     case "$1" in
       --type)     TYPE="$2"; shift 2 ;;
       --de)       DE="$2";   shift 2 ;;
-      --a)        A="$2";    shift 2 ;;
+      --a)        A="$2"; destinataire_explicite=1; shift 2 ;;
       --fichiers) FICHIERS="$2"; shift 2 ;;
       --reply)    REPLY="$2"; shift 2 ;;
       --attendu)  ATTENDU="$2"; shift 2 ;;
@@ -248,15 +259,24 @@ lire_options() {
       *) break ;;
     esac
   done
-  case "$DE:$A" in claude:claude|claude:codex|codex:claude|codex:codex) ;; *) echo "duo: auteurs invalides" >&2; return 1 ;; esac
+  if [ "$destinataire_explicite" = 0 ]; then
+    [ "$DE" = codex ] && A=claude || A=codex
+  fi
+  case "$DE:$A" in claude:codex|codex:claude) ;; *) echo "duo: auteurs invalides" >&2; return 1 ;; esac
   [[ "$TYPE" =~ ^[a-z][a-z0-9_-]*$ ]] || { echo "duo: type invalide" >&2; return 1; }
+  local champ
+  for champ in "$FICHIERS" "$REPLY" "$ATTENDU"; do
+    [[ "$champ" != *$'\n'* && "$champ" != *$'\r'* ]] || {
+      echo "duo: une metadonnee doit tenir sur une ligne." >&2; return 1; }
+  done
+  [[ -z "$REPLY" || "$REPLY" =~ ^[0-9]+$ ]] || { echo "duo: reply invalide" >&2; return 1; }
   RESTE="$*"
 }
 
 ecrire_tour() {
   local corps="$1" n f tmp
   verifier_texte "$corps" "$FICHIERS" "$REPLY" "$ATTENDU" || return 4
-  mkdir -p "$ECHANGES"
+  mkdir -p "$ECHANGES" || return 1
   n=$(reserver_numero) || return 1
   f="$ECHANGES/$n-$DE-$TYPE.md"
   # nom de temporaire UNIQUE : deux ecritures simultanees partageaient le meme
@@ -296,7 +316,7 @@ cmd_envoyer() {
   [ "$DE:$A" = "claude:codex" ] || {
     echo "duo: envoyer appelle seulement Codex depuis Claude ; utiliser ecrire pour repondre." >&2; return 1; }
   verifier_texte "$RESTE" "$FICHIERS" "$REPLY" "$ATTENDU" || return 4
-  local sid; sid=$(etat_lire session_codex)
+  local sid; sid=$(etat_lire session_codex) || return 4
   if [ -n "$sid" ] && [[ ! "$sid" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
     echo "duo: identifiant de session invalide, envoi refuse." >&2; return 4
   fi
@@ -406,7 +426,7 @@ cmd_envoyer() {
 cmd_bonjour() {
   local qui="${1:-claude}" mission="${2:-}"
   case "$qui" in claude|codex) ;; *) echo "duo: auteur invalide" >&2; return 1 ;; esac
-  mkdir -p "$ECHANGES" "$CLAIMS"
+  mkdir -p "$ECHANGES" "$CLAIMS" || return 1
   # La carte n est PLUS ecrite en dur. Elle l etait, et elle annoncait un REPL
   # persistant que Codex n avait pas, en niant des connecteurs et des taches de
   # fond qu il avait. Codex a demontre les deux. Un script ne peut pas savoir
@@ -471,7 +491,7 @@ cmd_pousser() {
   # plage court jusqu au --- de fermeture), la seconde supprimait le corps
   # jusqu a la fin faute de troisieme ---. pousser n a donc jamais rien envoye.
   # Meme extraction que afficher_tour : on compte les delimiteurs.
-  local corps; corps=$(awk 'BEGIN{d=0} /^---$/{d++; next} d>=2' "$dernier")
+  local corps; corps=$(awk 'BEGIN{d=0} {sub(/\r$/,"")} d<2 && /^---$/{d++; next} d>=2' "$dernier")
   [ -z "$corps" ] && { echo "duo: le tour $dernier n a pas de corps." >&2; return 1; }
   cmd_envoyer --sans-tour "$corps"
 }
@@ -510,8 +530,8 @@ afficher_tour() {
   # message brut.
   # barre ASCII : l UTF-8 sortait en mojibake selon la console Windows
   local corps
-  if [ "$(grep -c '^---$' "$f")" -ge 2 ]; then
-    corps=$(awk 'BEGIN{d=0} /^---$/{d++; next} d>=2 && (NF || vu) {vu=1; print}' "$f")
+  if head -1 "$f" | tr -d '\r' | grep -q '^---$' && [ "$(tr -d '\r' < "$f" | grep -c '^---$')" -ge 2 ]; then
+    corps=$(awk 'BEGIN{d=0} {sub(/\r$/,"")} d<2 && /^---$/{d++; next} d>=2 && (NF || vu) {vu=1; print}' "$f")
   else
     corps=$(cat "$f")
   fi
@@ -563,7 +583,7 @@ cmd_claim() {
   [ -z "$fichiers" ] && { echo "usage: duo.sh claim \"a.js b.md\" \"objectif\" [minutes]" >&2; return 1; }
   verifier_texte "$fichiers" "$but" || return 4
   [[ "$min" =~ ^[1-9][0-9]*$ ]] || { echo "duo: duree invalide" >&2; return 1; }
-  mkdir -p "$CLAIMS"
+  mkdir -p "$CLAIMS" || return 1
   local f="$CLAIMS/$qui.md" tmp="$CLAIMS/$qui.$$-${RANDOM:-0}.partiel"
   {
     echo "# Reserve par $qui"
@@ -648,7 +668,11 @@ cmd_libere() {
 
 cmd_journal() {
   local n="${1:-5}" f
-  ls -1 "$ECHANGES"/*.md 2>/dev/null | tail -"$n" | while read -r f; do
+  [[ "$n" =~ ^[1-9][0-9]*$ ]] || { echo "duo: nombre de tours invalide" >&2; return 1; }
+  [ -d "$ECHANGES" ] || return 0
+  local fichiers=("$ECHANGES"/*.md)
+  [ -e "${fichiers[0]}" ] || return 0
+  printf '%s\n' "${fichiers[@]}" | sort -V | tail -n "$n" | while IFS= read -r f; do
     afficher_tour "$f"
   done
 }
@@ -681,7 +705,7 @@ cmd_fil() {
     done
     [ -z "$(ls -1 "$ECHANGES" 2>/dev/null)" ] && echo '<p class="vide">Personne n a encore parle.</p>'
   } > "$DUO/fil.partiel"
-  mv -f "$DUO/fil.partiel" "$html"
+  mv -f "$DUO/fil.partiel" "$html" || return 1
   echo "$html"
 }
 
@@ -701,7 +725,7 @@ case "${1:-}" in
     "$PY" "$SCRIPTS/message_guard.py" layout "$DUO" || exit 4 ;;
 esac
 case "${1:-}" in
-  envoyer|pousser|fil|claims|reprendre|journal|suivre|etat)
+  init|envoyer|pousser|fil|claims|reprendre|journal|suivre|etat)
     "$PY" "$SCRIPTS/message_guard.py" channel "$DUO" || exit 4 ;;
 esac
 
