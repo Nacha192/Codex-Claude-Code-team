@@ -32,7 +32,7 @@ L interface accepte un **zip du dossier** dans les reglages, section
 Capacites / Skills. Le zip doit contenir le dossier avec son `SKILL.md` a la
 racine, c est-a-dire `duo-claude-codex/SKILL.md`, pas `SKILL.md` tout seul.
 
-C est `INSTALL-claude-code.zip` qui est fait pour ca.
+C est `INSTALL-claude-code-skill.zip` qui est fait pour ca.
 
 **Reserve honnete :** ce skill appelle des scripts shell et le binaire de Codex.
 Dans Claude Desktop il n y a pas forcement de shell ni de Codex installe, donc
@@ -50,7 +50,7 @@ Meme principe, autres chemins :
 | `<depot>/.agents/skills/duo-claude-codex/` | le depot, donc l equipe |
 | `~/.codex/skills/duo-claude-codex/` | la machine |
 
-C est `INSTALL-codex.zip`.
+C est `INSTALL-codex-skill.zip`.
 
 **Ne pas mettre le protocole dans `AGENTS.md`.** `AGENTS.md` est charge pour
 **toutes** les taches, y compris celles ou le duo n a aucun sens : le contenu

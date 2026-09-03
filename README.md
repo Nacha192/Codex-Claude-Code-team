@@ -25,8 +25,8 @@ ne connait pas et rien ne se passe.
 
 | | Telechargement | Ou le poser |
 |---|---|---|
-| Claude Code | **[le zip](https://github.com/Nacha192/Codex-Claude-Code-communication-team-/raw/main/INSTALL-claude-code.zip)** | `votre-projet/.claude/skills/` |
-| Codex | **[le zip](https://github.com/Nacha192/Codex-Claude-Code-communication-team-/raw/main/INSTALL-codex.zip)** | `votre-projet/.agents/skills/` |
+| Claude Code | **[le zip](https://github.com/Nacha192/Codex-Claude-Code-team/raw/main/INSTALL-claude-code-skill.zip)** | `votre-projet/.claude/skills/` |
+| Codex | **[le zip](https://github.com/Nacha192/Codex-Claude-Code-team/raw/main/INSTALL-codex-skill.zip)** | `votre-projet/.agents/skills/` |
 
 Decompressez, posez le dossier `duo-claude-codex` obtenu a l emplacement indique.
 
@@ -65,8 +65,8 @@ depot** : le canal est un dossier de fichiers, pas un service en ligne.
 **1. Recuperer le depot**
 
 ```bash
-git clone https://github.com/Nacha192/Codex-Claude-Code-communication-team-.git
-cd Codex-Claude-Code-communication-team-
+git clone https://github.com/Nacha192/Codex-Claude-Code-team.git
+cd Codex-Claude-Code-team
 ```
 
 **2. Poser le skill de Claude Code**, dans le projet ou vous travaillez :
@@ -174,8 +174,8 @@ ecrit le fichier lui-meme, ce qui est arrive lors du premier test.
 
 Pour Claude Desktop et claude.ai, qui attendent un zip :
 
-- **[Telecharger la version Claude Code](https://github.com/Nacha192/Codex-Claude-Code-communication-team-/raw/main/INSTALL-claude-code.zip)**
-- **[Telecharger la version Codex](https://github.com/Nacha192/Codex-Claude-Code-communication-team-/raw/main/INSTALL-codex.zip)**
+- **[Telecharger la version Claude Code](https://github.com/Nacha192/Codex-Claude-Code-team/raw/main/INSTALL-claude-code-skill.zip)**
+- **[Telecharger la version Codex](https://github.com/Nacha192/Codex-Claude-Code-team/raw/main/INSTALL-codex-skill.zip)**
 
 Ces deux liens telechargent directement, sans passer par une page
 intermediaire. Le zip contient le dossier avec son `SKILL.md` a la racine,
@@ -186,9 +186,9 @@ c est la forme attendue par l import.
 skill : ils ne se marchent pas dessus parce qu ils vont a deux endroits
 differents.
 
-1. Decompresser `INSTALL-claude-code.zip`, poser le dossier obtenu dans
+1. Decompresser `INSTALL-claude-code-skill.zip`, poser le dossier obtenu dans
    `votre-projet/.claude/skills/`
-2. Decompresser `INSTALL-codex.zip`, poser le dossier obtenu dans
+2. Decompresser `INSTALL-codex-skill.zip`, poser le dossier obtenu dans
    `votre-projet/.agents/skills/`
 
 Resultat attendu :

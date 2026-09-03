@@ -11,7 +11,7 @@ def build():
         files = COMMON + (['reference/codex-cli.md'] if side == 'claude-code'
                           else ['agents/openai.yaml'])
         source = ROOT / f'you-can-install-{side}'
-        target = ROOT / f'INSTALL-{side}.zip'
+        target = ROOT / f'INSTALL-{side}-skill.zip'
         with ZipFile(target, 'w', compression=ZIP_DEFLATED) as archive:
             for name in sorted(files):
                 info = ZipInfo('duo-claude-codex/' + name, (2026, 9, 3, 0, 0, 0))
