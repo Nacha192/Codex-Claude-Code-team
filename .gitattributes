@@ -1,6 +1,6 @@
-# duo.sh doit rester en LF : en CRLF, bash echoue avec "\r: command not found"
-# sur Linux et macOS. Ce n est pas theorique, git le convertit par defaut sous
-# Windows.
+# Keep Bash scripts in LF format: CRLF can cause "\r: command not found"
+# errors on Linux and macOS. Explicit rules prevent Git's automatic
+# line-ending conversion on Windows.
 *.sh   text eol=lf
 *.md   text eol=lf
 *.yaml text eol=lf
