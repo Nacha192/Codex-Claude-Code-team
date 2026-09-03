@@ -214,7 +214,8 @@ retire a Codex le droit d invoquer le skill de lui-meme. Sans lui, il se charge
 des que la description correspond, meme quand le `SKILL.md` dit qu il est
 explicite. Constate en direct.
 
-Detail complet dans `INSTALLATION.md`.
+Detail complet dans `you-can-install-claude-code/INSTALLATION.md` et
+`you-can-install-codex/INSTALLATION.md`.
 
 ---
 
@@ -255,7 +256,7 @@ fin sur une mission reelle**, ce qui l a casse a quatre endroits :
 1. `duo.sh` ne tournait pas cote Codex sous Windows. D ou la regle : le canal est
    la convention, pas le script.
 2. Une reponse n a ete archivee nulle part alors que le travail etait fait. Le
-   script recupere maintenant le log quand la sortie est vide.
+   script signale maintenant l absence de reponse ; il ne recopie plus le log brut.
 3. La poignee de main creait un tour en double. D ou `duo.sh pousser`.
 4. Le protocole se contredisait : il interdisait de travailler avant les deux
    presentations, alors que le premier tour exigeait les deux. L exception est
@@ -303,3 +304,45 @@ La lecon n est pas que le code etait mauvais. Elle est que **la relecture par
 l autre agent trouve ce que l auteur ne peut structurellement pas voir**, et
 qu un test de bout en bout trouve ce qu aucune relecture ne trouve. C est
 exactement ce que ce protocole sert a organiser.
+
+## Confidentialite du canal
+
+**`.duo/` et git.** Tout le canal reste local, y compris `MISSION.md` et
+`etat.json`. Avant chaque commande qui ecrit, le script cree ou complete
+`.duo/.gitignore` avec `*`, meme si un ancien fichier existe deja.
+Pour les ecritures manuelles, ajouter `.duo/` au `.gitignore` du depot avant
+de commencer. Un fichier ignore reste lisible sur disque.
+
+Un `.gitignore` ne protege pas les fichiers deja suivis. Le script refuse alors
+d ecrire : examiner `git ls-files -- .duo`, puis retirer le canal de l index
+avec `git rm -r --cached -- .duo`. Cela conserve les fichiers locaux et ne
+nettoie pas l historique deja publie. Ne jamais forcer l ajout du canal.
+
+Les nouveaux `.run-NNNN.log` contiennent seulement un identifiant de session
+et des diagnostics fixes. `scripts/run_metadata.py` elimine la sortie brute
+AVANT l ecriture sur disque. Copier ce fichier avec `duo.sh`.
+Une reponse finale absente produit un echec (code 3), jamais une copie du log
+dans le fil. Les anciens logs ne sont ni nettoyes ni supprimes automatiquement.
+
+Ce mecanisme ne filtre pas les secrets qu un agent ecrirait dans sa reponse
+finale ou un message. La regle ci-dessus reste necessaire. Le canal n ouvre
+aucun serveur de partage, mais les agents appeles utilisent leurs propres
+services reseau ; un fichier lu peut entrer dans leur contexte. Le dossier
+local et `.gitignore` ne constituent ni du chiffrement ni un controle d acces.
+
+## Verifier et publier une mise a jour
+
+Depuis la racine de ce depot, avec Python et Git Bash disponibles :
+
+```bash
+python tests/test_bridge.py
+python tools/package_skills.py
+git diff --check
+git status --short
+```
+
+Verifier les fichiers modifies, puis selectionner uniquement ceux de cette
+mise a jour avec `git add <chemins>`. Faire `git diff --cached --stat`, puis
+`git commit -m "Corrige la protection du canal duo"` et `git push origin main`.
+Un commit normal remplace les anciennes versions aux memes chemins. Ne pas
+supprimer le depot, ne pas utiliser `push --force` ni ajouter le canal `.duo/`.

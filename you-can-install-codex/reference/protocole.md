@@ -128,7 +128,8 @@ Il arrive : quota atteint, session morte, timeout. Ce n est pas un blocage.
 2. **Continuer seul sur ce qui est faisable seul**, et dire clairement a
    l utilisateur ce qui reste en suspens.
 3. Ne jamais inventer la reponse manquante, ne jamais l annoncer comme recue.
-4. Quand l autre revient, lui renvoyer le meme message avec `duo.sh suite`.
+4. Quand l autre revient, Claude peut relancer Codex avec `duo.sh pousser`.
+   Codex repond par `duo.sh ecrire --de codex --a claude`.
 
 Lors de la mise au point de ce skill, Codex a atteint son quota en pleine
 mission. Le travail a continue sans lui pendant une heure et il a repris au

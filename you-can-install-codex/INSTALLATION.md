@@ -116,15 +116,14 @@ Si `journal` affiche le message avec son en-tete numerote, tout est en place.
 
 ---
 
-## Les deux branches
+## Mise a jour
 
-Les deux dossiers sont independants et peuvent vivre sur deux branches :
+Les deux versions sont sur la branche `main`. Copier chaque dossier dans son
+emplacement respectif, y compris tous les fichiers de `scripts/`. Ne pas
+decompresser les deux ZIP dans le meme dossier.
 
-```
-branche claude-code  ->  .claude/skills/duo-claude-codex/
-branche codex        ->  .agents/skills/duo-claude-codex/
-```
-
-Le seul contenu partage est le protocole lui-meme. Si on le modifie d un cote,
-**il faut le reporter de l autre**, sinon on obtient deux verites divergentes,
-ce qui est exactement le probleme que ce skill est cense resoudre.
+Apres mise a jour, lancer `duo.sh init "<mission>"` dans chaque projet utilise :
+la protection git du canal existant est completee sans effacer les echanges.
+Si des fichiers du canal sont deja suivis, les examiner puis les retirer de
+l index comme indique dans le message du script. Les anciens logs restent
+sur disque ; les nouvelles executions ne conservent plus la sortie brute.

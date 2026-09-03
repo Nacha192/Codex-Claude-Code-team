@@ -46,6 +46,7 @@
 #     jamais un message a moitie ecrit.
 
 set -uo pipefail
+umask 077
 
 RACINE="${DUO_RACINE:-$PWD}"
 DUO="$RACINE/.duo"
@@ -56,6 +57,7 @@ MISSION="$DUO/MISSION.md"
 ETAT="$DUO/etat.json"
 
 PY=$(command -v python || command -v python3 || echo python)
+SCRIPTS=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
 # Codex PEUT etre dans le PATH (installation npm : un shim `codex` y atterrit),
 # mais ce n est pas garanti. Le dossier d installation, lui, contient un hash
@@ -75,6 +77,32 @@ trouver_codex() {
 }
 
 utc() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+
+# Protection appliquee avant chaque commande qui ecrit, meme sans init.
+# Le dernier * neutralise aussi les anciennes exceptions MISSION/etat.
+proteger_canal() {
+  mkdir -p "$DUO" || return 1
+  "$PY" - "$DUO/.gitignore" <<'PYEOF'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1])
+t = p.read_text(encoding="utf-8") if p.exists() else ""
+if not t.rstrip().endswith("# duo: canal local prive\n*"):
+    with p.open("a", encoding="utf-8", newline="\n") as f:
+        f.write("\n# duo: canal local prive\n*\n")
+PYEOF
+  [ $? -eq 0 ] || return 1
+  # Un ignore ne retire PAS les fichiers deja suivis de l index.
+  if git -C "$RACINE" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    local suivis
+    suivis=$(git -C "$RACINE" ls-files -- .duo) || return 1
+    if [ -n "$suivis" ]; then
+      echo "duo: .duo contient des fichiers deja suivis par git." >&2
+      echo "Verifier puis retirer .duo de l index avec git rm -r --cached -- .duo." >&2
+      echo "Les fichiers locaux restent sur disque ; l historique git reste a examiner." >&2
+      return 1
+    fi
+  fi
+}
 
 # --- etat.json : lu et ecrit par python, jamais par sed. -------------------
 etat_lire() {
@@ -99,11 +127,15 @@ for _ in range(100):                       # 5 s au plus
     except OSError as e:
         if e.errno != errno.EEXIST: break
         time.sleep(0.05)
+if not pris:
+    sys.exit("duo: verrou etat.json indisponible, aucune modification")
 try:
     d = {}
     if os.path.exists(p):
         try: d = json.load(open(p, encoding="utf-8"))
-        except Exception: d = {}
+        except Exception: sys.exit("duo: etat.json illisible, aucune modification")
+    if k == "dernier_tour":
+        v = f"{max(int(d.get(k, 0)), int(v)):04d}"
     d[k] = v
     fd, tmp = tempfile.mkstemp(dir=os.path.dirname(p) or ".")
     with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -115,7 +147,7 @@ try:
             time.sleep(0.05)
     else:
         os.unlink(tmp)
-        sys.stderr.write("duo: etat.json occupe, cle " + k + " non ecrite" + chr(10))
+        sys.exit("duo: etat.json occupe, cle non ecrite")
 finally:
     if pris:
         try: os.rmdir(verrou)
@@ -178,27 +210,6 @@ ${intitule:-(une phrase, pas un paragraphe)}
 EOF
     echo "cree : $MISSION"
   fi
-  # Le canal se protege lui-meme. Un .gitignore DANS .duo/ s applique a ce
-  # dossier quoi qu il arrive, sans dependre de quelqu un qui aurait lu la doc
-  # et pense a l ajouter. Les logs sont la sortie brute des runs : si l autre
-  # agent a ouvert un .env en explorant, son contenu est dedans en clair.
-  if [ ! -f "$DUO/.gitignore" ]; then
-    cat > "$DUO/.gitignore" <<'GITEOF'
-# Ecrit par duo.sh init. Ne rien committer d ephemere ni de verbeux.
-# Les .log sont la sortie brute des runs : ils peuvent contenir le contenu
-# de fichiers que l autre agent a ouverts. Ils ne sortent jamais d ici.
-*.log
-.numeros/
-fil.html
-echanges/
-claims/
-# On GARDE MISSION.md et etat.json : ils expliquent ce qui a ete decide.
-!MISSION.md
-!etat.json
-GITEOF
-    echo "cree : $DUO/.gitignore"
-  fi
-
   [ -f "$ETAT" ] || "$PY" -c "import json,sys;json.dump({'mission':sys.argv[1],'pilote':'','session_codex':'','dernier_tour':'0000','statut':'ouverte'},open(sys.argv[2],'w',encoding='utf-8'),ensure_ascii=False,indent=2)" "${intitule:-sans titre}" "$ETAT"
   echo "canal pret dans $DUO"
 }
@@ -229,6 +240,8 @@ lire_options() {
       *) break ;;
     esac
   done
+  case "$DE:$A" in claude:claude|claude:codex|codex:claude|codex:codex) ;; *) echo "duo: auteurs invalides" >&2; return 1 ;; esac
+  [[ "$TYPE" =~ ^[a-z][a-z0-9_-]*$ ]] || { echo "duo: type invalide" >&2; return 1; }
   RESTE="$*"
 }
 
@@ -257,18 +270,18 @@ ecrire_tour() {
   # renommage atomique : jamais de lecture partielle. Verifie : un mv qui
   # echoue passait inapercu et on annoncait un message qui n existait pas.
   mv -f "$tmp" "$f" || { echo "duo: impossible d ecrire $f" >&2; rm -f "$tmp"; return 1; }
-  etat_ecrire dernier_tour "$n"
+  etat_ecrire dernier_tour "$n" || return 1
   echo "$f"
 }
 
 cmd_ecrire() {
-  lire_options "$@"
+  lire_options "$@" || return 1
   [ -z "$RESTE" ] && { echo "usage: duo.sh ecrire [options] \"message\"" >&2; return 1; }
   ecrire_tour "$RESTE"
 }
 
 cmd_envoyer() {
-  lire_options "$@"
+  lire_options "$@" || return 1
   [ -z "$RESTE" ] && { echo "usage: duo.sh envoyer [options] \"message\"" >&2; return 1; }
 
   local codex; codex=$(trouver_codex) || {
@@ -285,6 +298,7 @@ cmd_envoyer() {
   # la porte de derriere, la moitie corrigee seulement.
   local n; n=$(reserver_numero) || return 1
   local sortie="$ECHANGES/$n-codex-reponse.md"
+  local brouillon="$DUO/.reponse-$n.partiel"
 
   # `codex exec resume --help` ne declare ni -C ni -s : les passer echoue.
   # On fait donc le `cd` avant. Ce que resume herite exactement du sandbox
@@ -293,12 +307,18 @@ cmd_envoyer() {
   # Un log PAR ENVOI : deux envoyer concurrents partageaient le meme fichier,
   # donc l un lisait l erreur ou le session id de l autre.
   local log="$DUO/.run-$n.log"
+  local codes
   if [ -n "$sid" ]; then
-    ( cd "$RACINE" && "$codex" exec resume "$sid" -o "$sortie" "$RESTE" ) >"$log" 2>&1
+    ( cd "$RACINE" && "$codex" exec resume "$sid" -o "$brouillon" "$RESTE" ) 2>&1 |
+      "$PY" "$SCRIPTS/run_metadata.py" >"$log"
+    codes=("${PIPESTATUS[@]}")
   else
-    "$codex" exec -C "$RACINE" -s workspace-write -o "$sortie" "$RESTE" >"$log" 2>&1
+    "$codex" exec -C "$RACINE" -s workspace-write -o "$brouillon" "$RESTE" 2>&1 |
+      "$PY" "$SCRIPTS/run_metadata.py" >"$log"
+    codes=("${PIPESTATUS[@]}")
   fi
-  local code=$?
+  local code=${codes[0]}
+  [ "${codes[1]}" -eq 0 ] || code=3
 
   # Codex imprime "session id: <uuid>" dans son en-tete de run. On s ancre sur
   # L ETIQUETTE, jamais sur "le premier UUID du log" : un UUID peut apparaitre
@@ -314,31 +334,18 @@ cmd_envoyer() {
     if [ -n "$trouve" ]; then
       etat_ecrire session_codex "$trouve"
     else
-      echo "duo: session id introuvable dans le log, la reprise passera par --last" >&2
+      echo "duo: session id introuvable dans le log, le prochain envoi ouvrira une nouvelle session" >&2
     fi
   fi
 
-  # -o n est pas toujours honore : quand la reponse part sur la sortie standard
-  # et pas dans le fichier, on la recupere du log plutot que de la perdre. Bug
-  # trouve au premier test reel : les images etaient produites et la reponse
-  # n etait nulle part dans le fil. Uniquement si le run a REUSSI, sinon un
-  # message d erreur se faisait passer pour sa reponse.
-  if [ $code -eq 0 ] && [ ! -s "$sortie" ] && [ -s "$log" ]; then
-    { echo "---"; echo "n: $n"; echo "de: codex"; echo "a: claude";
-      echo "type: reponse"; echo "utc: $(utc)";
-      echo "note: recupere du log, -o n avait rien ecrit"; echo "---"; echo
-      cat "$log"; } > "$sortie.partiel" && mv -f "$sortie.partiel" "$sortie"
-  fi
-
-  # `-o` ecrit la reponse BRUTE, sans en-tete. Le fil exige que chaque tour en
-  # porte un : sans ca, l affichage ne trouvait pas le corps et montrait un tour
-  # vide, et un lecteur humain ne savait pas qui parlait. Seul le rattrapage par
-  # le log en posait un, le chemin normal l oubliait.
-  if [ $code -eq 0 ] && [ -s "$sortie" ] && ! head -1 "$sortie" | grep -q '^---$'; then
+  # Seule la reponse finale peut devenir un tour, jamais les sorties d outils.
+  # -o ecrit hors du fil ; publication atomique une fois le processus termine.
+  if [ $code -eq 0 ] && [ -s "$brouillon" ]; then
     { echo "---"; echo "n: $n"; echo "de: codex"; echo "a: claude";
       echo "type: reponse"; echo "utc: $(utc)"; echo "---"; echo
-      cat "$sortie"; } > "$sortie.entete" && mv -f "$sortie.entete" "$sortie"
+      cat "$brouillon"; } > "$sortie.partiel" && mv -f "$sortie.partiel" "$sortie" || code=3
   fi
+  rm -f "$brouillon" "$sortie.partiel"
 
   # On ne cherche une cause d echec QUE si le run a echoue. La version
   # precedente fouillait le log dans tous les cas, et Codex, en lisant duo.sh
@@ -362,7 +369,7 @@ cmd_envoyer() {
     return 3
   fi
 
-  etat_ecrire dernier_tour "$n"
+  etat_ecrire dernier_tour "$n" || return 1
   echo "$sortie"
 }
 
@@ -373,6 +380,7 @@ cmd_envoyer() {
 # pas, et ce que je commence tout de suite.
 cmd_bonjour() {
   local qui="${1:-claude}" mission="${2:-}"
+  case "$qui" in claude|codex) ;; *) echo "duo: auteur invalide" >&2; return 1 ;; esac
   mkdir -p "$ECHANGES" "$CLAIMS"
   # La carte n est PLUS ecrite en dur. Elle l etait, et elle annoncait un REPL
   # persistant que Codex n avait pas, en niant des connecteurs et des taches de
@@ -630,7 +638,7 @@ cmd_fil() {
     echo 'header{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid #262a36;padding-bottom:14px}'
     echo 'header b{font-weight:600}header span{font-size:12px;opacity:.55}'
     echo '.vide{opacity:.5;font-style:italic;margin-top:40px}</style>'
-    echo "<header><b>$(etat_lire mission)</b><span>"
+    echo "<header><b>$(etat_lire mission | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')</b><span>"
     if [ "$SUIVI" = "1" ]; then echo "en direct, recharge toutes les 2 s &middot; $(utc)"
     else echo "instantane du $(utc) &middot; duo.sh suivre pour le direct"; fi
     echo '</span></header>'
@@ -657,6 +665,11 @@ cmd_etat() {
   echo "── reserve"
   cmd_claims
 }
+
+case "${1:-}" in
+  init|bonjour|envoyer|ecrire|claim|pousser|libere|fil)
+    proteger_canal || exit 1 ;;
+esac
 
 case "${1:-}" in
   init)    shift; cmd_init "${1:-}" ;;
