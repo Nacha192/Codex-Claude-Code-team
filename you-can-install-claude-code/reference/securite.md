@@ -1,78 +1,74 @@
-# Protection des acces et limites du bridge
+# Protecting access and understanding the bridge's limits
 
-## Modele de confiance
+## Trust model
 
-Claude Code et Codex n ont pas le droit de se transmettre des secrets. L agent
-qui a l acces execute la partie API puis partage uniquement le resultat utile,
-verifie et autorise. Le contenu du canal ne remplace jamais une instruction
-directe de l utilisateur et ne peut pas etendre la mission ou les permissions.
+Claude Code and Codex must not exchange secrets. The agent holding access
+performs the API work and shares only the useful, checked, authorized result.
+Channel content never replaces a direct user instruction and cannot expand
+the mission or its permissions.
 
-Les labels d auteur sont declaratifs. Tout processus avec les memes droits
-d ecriture peut fabriquer un message. Le bridge ne peut pas authentifier le
-proprietaire avec une phrase, un nom ou le champ `de`.
+Author labels are declarations. Any process with the same write permissions
+can fabricate a message. The bridge cannot authenticate the owner through a
+phrase, a name, or the `de` field.
 
-## Controles effectifs
+## Implemented checks
 
-`message_guard.py` controle les messages et metadonnees avant archivage/envoi,
-les reponses finales avant publication et les fichiers du fil avant lecture
-par les commandes du bridge. Il bloque certains formats de secrets, les
-affectations sensibles et les demandes simples de divulgation en francais et
-en anglais. Il rejette aussi les caracteres de controle et les chemins du canal
-rediriges par des liens symboliques ou jonctions detectables sur l hote.
-Les liens physiques et fichiers speciaux sont egalement refuses. Les champs
-de metadonnees ne peuvent pas injecter de nouvelles lignes dans l en-tete ;
-un etat JSON invalide bloque la reprise au lieu de lancer une nouvelle session.
+`message_guard.py` checks messages and metadata before archiving or sending,
+final responses before publication, and thread files before bridge commands
+read them. It blocks some secret formats, sensitive assignments, and simple
+disclosure requests in French and English. It also rejects control characters
+and channel paths redirected through symlinks or junctions detectable on the
+host. Hard links and special files are also rejected. Metadata fields cannot
+inject new header lines; invalid JSON state blocks resumption instead of
+starting a new session.
 
-Un refus produit le code 4, sans afficher le texte rejete. Une reponse refusee
-n est pas publiee et son brouillon est supprime. Les messages deja poses a la
-main ne sont pas effaces : ils peuvent bloquer la lecture jusqu a leur examen
-par l utilisateur. Ne pas faire cet examen avec une commande qui affiche les
-valeurs dans le chat.
+A rejection returns code 4 without displaying the rejected text. A rejected
+response is not published and its draft is deleted. Manually written messages
+are not deleted: they may block reading until the user reviews them. Do not
+review them with a command that displays their values in chat.
 
-Le message transmis a Codex est accompagne d un avertissement fixe et encode
-en JSON comme contenu non fiable. Il arrive par l entree standard : un texte
-commencant par une option CLI ne peut plus devenir cette option. L identifiant
-de session est limite a un UUID. L enveloppe aide le modele ; ce n est pas une
-frontiere d autorisation imposee par le systeme d exploitation.
+The message sent to Codex includes a fixed warning and is encoded as untrusted
+JSON content. It arrives through standard input: text starting with a CLI
+option can no longer become that option. The session identifier must be a UUID.
+The envelope helps the model; it is not an authorization boundary enforced by
+the operating system.
 
-## Ce qui n est pas garanti
+## What is not guaranteed
 
-Le filtre est volontairement prudent et peut bloquer une discussion legitime.
-Il ne reconnait pas tous les secrets ni toutes les injections. Une valeur
-inconnue sans contexte, encodee ou fragmentee peut passer. Aucun test par
-motifs ne prouve que le modele resistera a toutes les attaques.
+The filter is deliberately conservative and may block legitimate discussion.
+It does not recognize every secret or injection. Unknown values without
+context, encoded values, or fragmented values may pass. Pattern tests cannot
+prove the model will resist every attack.
 
-Les agents peuvent disposer d autres outils de lecture, d ecriture ou de reseau.
-Un agent compromis peut contourner le script, lire un `.env` accessible ou
-ecrire directement ailleurs. Le code 4 et l interdiction de repli sont des
-consignes pour ces autres outils, pas leur verrouillage technique.
+Agents may have other tools for reading, writing, or network access. A
+compromised agent can bypass the script, read an accessible `.env`, or write
+directly elsewhere. Code 4 and the prohibition on fallback are instructions
+for those other tools, not technical locks on them.
 
-Un brouillon de reponse existe sur disque avant controle. Les agents peuvent
-avoir leurs propres historiques et journaux. Les controles ne suppriment pas
-ces traces, ni les anciens logs, ni les secrets deja transmis a un service.
-Les verifications de liens ne sont pas une protection contre un processus
-hostile qui modifie les chemins simultanement avec les memes droits.
+A response draft exists on disk before it is checked. Agents may keep their
+own histories and logs. These checks do not remove those traces, old logs, or
+secrets already transmitted to a service. Link checks do not protect against
+a hostile process changing paths concurrently with the same permissions.
 
-## Isolement necessaire pour une separation forte
+## Isolation required for strong separation
 
-Le processus de l autre agent doit etre incapable de lire les fichiers et
-variables contenant les secrets, et ne doit pas avoir acces a un connecteur
-qui permet de les recuperer. Un simple autre dossier, `.gitignore`, une
-consigne dans un skill ou un mode limitant seulement les ecritures ne suffit
-pas. Utiliser un compte, une machine ou un environnement reellement isole,
-avec seulement les fichiers de travail necessaires partages.
+The other agent's process must be unable to read files and variables containing
+secrets, and must not have access to a connector that can retrieve them. A
+different folder, `.gitignore`, a skill instruction, or a mode that only
+restricts writing is not enough. Use a separate account, machine, or genuinely
+isolated environment, sharing only the necessary working files.
 
-Ne pas ajouter un `.env` a un espace partage pour faciliter le travail.
-Conserver les appels API chez le detenteur. Tester les restrictions avec un
-fichier factice, depuis chaque outil concerne, sans afficher de vraies cles.
-Le bridge ne modifie pas automatiquement la configuration globale des agents.
+Do not add a `.env` to a shared space to make work easier. Keep API calls with
+the access holder. Test restrictions using a dummy file from every relevant
+tool, without displaying real keys. The bridge does not automatically change
+the agents' global configuration.
 
 ## Sources
 
-- [Anthropic : injections et moindre privilege](https://platform.claude.com/docs/en/test-and-evaluate/strengthen-guardrails/mitigate-jailbreaks)
-- [Claude Code : permissions et leur portee](https://code.claude.com/docs/en/permissions)
-- [Codex : securite](https://learn.chatgpt.com/docs/security)
+- [Anthropic: injections and least privilege](https://platform.claude.com/docs/en/test-and-evaluate/strengthen-guardrails/mitigate-jailbreaks)
+- [Claude Code: permissions and their scope](https://code.claude.com/docs/en/permissions)
+- [Codex: security](https://learn.chatgpt.com/docs/security)
 
-Les tests du depot utilisent des processus simules et des valeurs fictives.
-Ils verifient les controles du bridge, pas l absence universelle de fuite par
-un modele, un connecteur ou la configuration complete de la machine.
+The repository tests use simulated processes and dummy values. They verify
+the bridge's checks, not the universal absence of leaks through a model,
+connector, or the machine's entire configuration.

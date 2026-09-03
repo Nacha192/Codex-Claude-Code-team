@@ -1,13 +1,13 @@
 # Codex × Claude Code (communication / team)
 
-**Faire travailler Codex CLI et Claude Code ensemble sur une meme mission, sans
-qu ils se marchent dessus.** Un protocole, un canal de fichiers, et deux skills :
-un pour chacun, meme regles, chacun avec ses contraintes propres.
+**Put Codex CLI and Claude Code to work on the same mission without getting
+in each other's way.** One protocol, a file channel, and two skills: one for
+each agent, with shared rules and their own constraints.
 
-Deux agents ne valent pas mieux qu un seul par magie. Ils valent mieux quand
-chacun fait ce que l autre ne peut pas, et ils valent moins que zero quand ils
-se repassent la meme tache en se felicitant. Ce depot sert a obtenir le premier
-cas et a reduire ce risque de coordination.
+Two agents are not magically better than one. They are better when each does
+what the other cannot, and worse than useless when they pass the same task
+back and forth while congratulating each other. This repository aims for the
+first outcome and reduces that coordination risk.
 
 ## Security boundary
 
@@ -17,24 +17,24 @@ only the necessary, reviewed result. The message filter is a best-effort check;
 it cannot stop an agent that can read secrets and use other tools to send them.
 Keep credentials outside shared files and enforce access boundaries in the host.
 
-## Installation, en 30 secondes
+## Installation in 30 seconds
 
-**Telechargez les deux.** Un skill pour Claude Code, un pour Codex. Les deux
-sont necessaires : si un seul des agents l a, il suit un protocole que l autre
-ne connait pas et rien ne se passe.
+**Download both.** One skill for Claude Code, one for Codex. Both are required:
+if only one has it, it follows a protocol the other does not know, and nothing
+happens.
 
-| | Telechargement | Ou le poser |
+| | Download | Where to put it |
 |---|---|---|
-| Claude Code | **[le zip](https://github.com/Nacha192/Codex-Claude-Code-team/raw/main/INSTALL-claude-code-skill.zip)** | `votre-projet/.claude/skills/` |
-| Codex | **[le zip](https://github.com/Nacha192/Codex-Claude-Code-team/raw/main/INSTALL-codex-skill.zip)** | `votre-projet/.agents/skills/` |
+| Claude Code | **[ZIP archive](https://github.com/Nacha192/Codex-Claude-Code-team/raw/main/INSTALL-claude-code-skill.zip)** | `votre-projet/.claude/skills/` |
+| Codex | **[ZIP archive](https://github.com/Nacha192/Codex-Claude-Code-team/raw/main/INSTALL-codex-skill.zip)** | `votre-projet/.agents/skills/` |
 
-Decompressez, posez le dossier `duo-claude-codex` obtenu a l emplacement indique.
+Extract each archive and put the resulting `duo-claude-codex` folder in the
+specified location.
 
-Les fichiers du depot sont nommes pour qu il n y ait pas a reflechir :
-`INSTALL-*` sont les deux archives a installer, `you-can-install-*` sont les
-memes en clair si vous preferez copier les dossiers a la main, et le reste
-(`README.md`, `LICENSE`) ne s installe pas.
-Vous devez arriver a ceci :
+The repository filenames make their purpose clear: `INSTALL-*` are the two
+archives to install; `you-can-install-*` contain the same files unpacked, if
+you prefer copying folders manually. The rest (`README.md`, `LICENSE`) is not
+installed. You should end up with:
 
 ```
 votre-projet/
@@ -42,54 +42,54 @@ votre-projet/
   .agents/skills/duo-claude-codex/SKILL.md
 ```
 
-**C est tout.** Rien a installer, rien a lancer, rien a redemarrer. Les deux
-agents doivent travailler sur la meme machine et dans le meme depot : le canal
-est un dossier de fichiers, pas un service en ligne.
+**That's it.** Nothing else to install, launch, or restart. Both agents must
+work on the same machine and in the same repository: the channel is a folder
+of files, not an online service.
 
-Ensuite, on le demande : « utilise le skill duo-claude-codex pour cette
-mission ». Il ne se declenche pas tout seul, c est voulu.
-
----
+Then ask: “Use the duo-claude-codex skill for this mission.” It deliberately
+does not activate on its own.
 
 ---
 
-## Demarrage rapide
+---
 
-**Il faut installer les deux.** Un skill chez Claude Code, un chez Codex. Si un
-seul des deux l a, il suit un protocole que l autre ne connait pas, et rien ne
-fonctionne. Ce n est pas un skill au choix, c est une paire.
+## Quick start
 
-Les deux agents doivent aussi travailler **sur la meme machine et dans le meme
-depot** : le canal est un dossier de fichiers, pas un service en ligne.
+**Install both.** One skill for Claude Code, one for Codex. If only one has it,
+it follows a protocol the other does not know, and nothing works. These skills
+are a pair, not alternatives.
 
-**1. Recuperer le depot**
+Both agents must also work **on the same machine and in the same repository**:
+the channel is a folder of files, not an online service.
+
+**1. Get the repository**
 
 ```bash
 git clone https://github.com/Nacha192/Codex-Claude-Code-team.git
 cd Codex-Claude-Code-team
 ```
 
-**2. Poser le skill de Claude Code**, dans le projet ou vous travaillez :
+**2. Install the Claude Code skill** in your working project:
 
 ```bash
 mkdir -p /chemin/vers/votre-projet/.claude/skills
 cp -r you-can-install-claude-code /chemin/vers/votre-projet/.claude/skills/duo-claude-codex
 ```
 
-Ou `~/.claude/skills/duo-claude-codex` pour l avoir dans tous vos projets.
+Or use `~/.claude/skills/duo-claude-codex` to make it available in every project.
 
-**3. Poser le skill de Codex**, dans le meme projet :
+**3. Install the Codex skill** in the same project:
 
 ```bash
 mkdir -p /chemin/vers/votre-projet/.agents/skills
 cp -r you-can-install-codex /chemin/vers/votre-projet/.agents/skills/duo-claude-codex
 ```
 
-**Rien d autre a installer.** Pas de paquet, pas de dependance, pas de service.
-Les scripts utilisent bash et python, deja presents sur la plupart des machines,
-et le binaire de Codex si vous voulez que Claude puisse l appeler tout seul.
+**Nothing else to install.** No packages, dependencies, or services. The scripts
+use Bash and Python, already available on most machines, plus the Codex binary
+if you want Claude to be able to invoke it independently.
 
-**4. Verifier**, dans un dossier quelconque :
+**4. Check the setup** in any folder:
 
 ```bash
 D=.claude/skills/duo-claude-codex/scripts/duo.sh
@@ -98,100 +98,96 @@ bash $D bonjour claude "essai" "- Je suis Claude Code, outils : shell, git."
 bash $D journal 1
 ```
 
-Si le dernier affiche le message en couleur avec son numero et son auteur,
-tout est en place.
+If the last command displays the message in color with its number and author,
+everything is in place.
 
-Le 3e argument de `bonjour` est la **carte** : les outils que l agent voit
-vraiment dans sa session. Sans elle, le tour part avec des champs a completer et
-le script vous le dit. C est volontaire : le script ne peut pas deviner ce qui
-est expose en face, et une carte inventee coute un tour a l autre.
+The third argument to `bonjour` is the **capability card**: the tools the agent
+actually sees in its session. Without it, the turn contains fields to complete,
+and the script tells you so. This is deliberate: the script cannot guess which
+tools the other agent has, and an invented card wastes the other agent's turn.
 
-Pour suivre une conversation en direct, dans un second terminal :
+To follow a conversation live, open a second terminal:
 
 ```bash
 bash .claude/skills/duo-claude-codex/scripts/duo.sh suivre
 ```
 
-Chaque tour s affiche des qu il arrive. Ctrl-C pour sortir.
+Each turn appears as it arrives. Press Ctrl-C to exit.
 
-**5. S en servir.** Le skill ne se declenche pas tout seul, c est voulu. On le
-demande : « utilise le skill duo-claude-codex pour cette mission ».
+**5. Use it.** The skill deliberately does not activate on its own. Ask:
+“Use the duo-claude-codex skill for this mission.”
 
 ---
 
-## Ce que ca resout
+## What this solves
 
-| Sans protocole | Avec |
+| Without a protocol | With one |
 |---|---|
-| Chacun suppose ce que l autre sait faire | Une carte declaree a l ouverture, corrigeable |
-| Les deux modifient le meme fichier | Reservation avec expiration |
-| L un attend l autre sans rien faire | Celui qui attend ne bloque jamais |
-| Un desaccord se termine en compromis mou | La preuve gagne, sinon le pilote tranche |
-| L utilisateur ne sait pas de quoi ils parlent | Un fil de fichiers lisible en une commande |
-| Le duo se declenche sur des taches ou il ne sert a rien | Un critere de declenchement ecrit noir sur blanc |
+| Each agent assumes what the other can do | A capability card declared at the start and open to correction |
+| Both edit the same file | File reservations with expiration |
+| One waits for the other without doing anything | The waiting agent never blocks |
+| Disagreements end in weak compromises | Evidence wins; otherwise the lead decides |
+| The user cannot tell what they are discussing | A file thread readable with one command |
+| The duo activates for tasks where it adds nothing | An explicit activation criterion |
 
 ---
 
-## Ce qu il y a dedans
+## What's included
 
 | | |
 |---|---|
-| `you-can-install-claude-code/` | la version Claude Code, a poser dans `.claude/skills/` |
-| `you-can-install-codex/` | la version Codex, a poser dans `.agents/skills/` ou `~/.codex/skills/` |
-| les deux `.zip` | les memes, prets a importer la ou un zip est attendu |
+| `you-can-install-claude-code/` | Claude Code version, to place in `.claude/skills/` |
+| `you-can-install-codex/` | Codex version, to place in `.agents/skills/` or `~/.codex/skills/` |
+| Both `.zip` files | The same versions, ready for interfaces that expect a ZIP |
 
-Une seule branche, `main`, et une seule copie de chaque version. Deux copies du
-meme fichier finissent toujours par diverger, et ce depot passe une section
-entiere a expliquer pourquoi c est le pire resultat possible.
+One branch, `main`, and one copy of each version. Two copies of the same file
+always end up diverging, and this repository spends an entire section
+explaining why that is the worst possible outcome.
 
 ---
 
-## Ou ca tourne
+## Where it runs
 
-Le canal a besoin de deux choses : **un shell** et **un systeme de fichiers
-partage entre les deux agents**. Partout ou ces deux conditions sont reunies,
-tout fonctionne.
+The channel needs two things: **a shell** and **a filesystem shared by both
+agents**. Wherever those conditions are met, it works.
 
-| | Le protocole | Le canal `duo.sh` |
+| | Protocol | `duo.sh` channel |
 |---|---|---|
-| Claude Code, terminal ou CLI | oui | **oui** |
-| Codex CLI, terminal | oui | **oui** |
-| Codex depuis l application | oui | oui, dans les racines autorisees par son sandbox |
-| Claude Code depuis l application de bureau | oui | selon l acces shell de la session |
-| Claude Desktop, claude.ai | oui, comme document | non, pas de shell |
+| Claude Code, terminal or CLI | Yes | **Yes** |
+| Codex CLI, terminal | Yes | **Yes** |
+| Codex in the app | Yes | Yes, within roots allowed by its sandbox |
+| Claude Code in the desktop app | Yes | Depends on the session's shell access |
+| Claude Desktop, claude.ai | Yes, as a document | No shell, so no channel |
 
-Le cas normal est **les deux en terminal sur la meme machine**, chacun dans le
-meme depot. C est la configuration sur laquelle le protocole a ete teste de bout
-en bout.
+The normal setup is **both agents in terminals on the same machine**, working
+in the same repository. That is the configuration tested end to end.
 
-Et meme sans le script, le protocole tient : le canal est une **convention de
-nommage de fichiers**, pas un binaire. Un agent qui ne peut pas lancer `duo.sh`
-ecrit le fichier lui-meme, ce qui est arrive lors du premier test.
+Even without the script, the protocol holds: the channel is a **filename
+convention**, not a binary. An agent that cannot run `duo.sh` writes the file
+itself, as happened during the first test.
 
 ---
 
-## Telechargement direct
+## Direct downloads
 
-Pour Claude Desktop et claude.ai, qui attendent un zip :
+For Claude Desktop and claude.ai, which expect a ZIP:
 
-- **[Telecharger la version Claude Code](https://github.com/Nacha192/Codex-Claude-Code-team/raw/main/INSTALL-claude-code-skill.zip)**
-- **[Telecharger la version Codex](https://github.com/Nacha192/Codex-Claude-Code-team/raw/main/INSTALL-codex-skill.zip)**
+- **[Download the Claude Code version](https://github.com/Nacha192/Codex-Claude-Code-team/raw/main/INSTALL-claude-code-skill.zip)**
+- **[Download the Codex version](https://github.com/Nacha192/Codex-Claude-Code-team/raw/main/INSTALL-codex-skill.zip)**
 
-Ces deux liens telechargent directement, sans passer par une page
-intermediaire. Le zip contient le dossier avec son `SKILL.md` a la racine,
-c est la forme attendue par l import.
+These links download directly, without an intermediate page. Each ZIP contains
+the skill folder with `SKILL.md` at its root, as expected by the importer.
 
-**Quoi en faire, une fois telecharges.** Chaque zip contient un dossier
-`duo-claude-codex`. Les deux portent le meme nom, c est normal, c est le nom du
-skill : ils ne se marchent pas dessus parce qu ils vont a deux endroits
-differents.
+**After downloading.** Each ZIP contains a `duo-claude-codex` folder. Both have
+the same name because that is the skill's name. They do not conflict because
+they go in different locations.
 
-1. Decompresser `INSTALL-claude-code-skill.zip`, poser le dossier obtenu dans
-   `votre-projet/.claude/skills/`
-2. Decompresser `INSTALL-codex-skill.zip`, poser le dossier obtenu dans
-   `votre-projet/.agents/skills/`
+1. Extract `INSTALL-claude-code-skill.zip` and put the resulting folder in
+   `votre-projet/.claude/skills/`.
+2. Extract `INSTALL-codex-skill.zip` and put the resulting folder in
+   `votre-projet/.agents/skills/`.
 
-Resultat attendu :
+Expected result:
 
 ```
 votre-projet/
@@ -199,150 +195,146 @@ votre-projet/
   .agents/skills/duo-claude-codex/SKILL.md
 ```
 
-C est tout. Rien a lancer, rien a redemarrer, rien a declarer.
+That's it. Nothing to launch, restart, or register.
 
-**Ne decompressez pas les deux au meme endroit** : meme nom de dossier, le
-second ecraserait le premier.
+**Do not extract both into the same location**: they have the same folder name,
+so the second would overwrite the first.
 
-Sinon, le bouton vert **Code** en haut de la page, puis **Download ZIP**,
-telecharge le depot entier : les deux versions decompressees, prêtes a copier
-au bon endroit.
+Alternatively, use the green **Code** button at the top of the page, then
+**Download ZIP**, to download the whole repository: both unpacked versions,
+ready to copy into the right locations.
 
 ---
 
 ## Installation
 
-**Claude Code** : poser le dossier dans `<projet>/.claude/skills/duo-claude-codex/`
-pour un seul projet, ou `~/.claude/skills/` pour tous. Rien a redemarrer.
+**Claude Code**: put the folder in `<projet>/.claude/skills/duo-claude-codex/`
+for one project, or `~/.claude/skills/` for all projects. No restart needed.
 
-**Codex** : `<depot>/.agents/skills/duo-claude-codex/` ou `~/.codex/skills/`.
-**Garder `agents/openai.yaml`**, a cet emplacement exact, dans un sous-dossier
-`agents/` du skill : c est la ou les skills livres par OpenAI le placent. Il
-retire a Codex le droit d invoquer le skill de lui-meme. Sans lui, il se charge
-des que la description correspond, meme quand le `SKILL.md` dit qu il est
-explicite. Constate en direct.
+**Codex**: use `<depot>/.agents/skills/duo-claude-codex/` or `~/.codex/skills/`.
+**Keep `agents/openai.yaml` in that exact location**, inside the skill's
+`agents/` subfolder: that is where OpenAI's bundled skills put it. It removes
+Codex's permission to invoke the skill on its own. Without it, the skill loads
+whenever the description matches, even if `SKILL.md` says invocation must be
+explicit. This was observed directly.
 
-Detail complet dans `you-can-install-claude-code/INSTALLATION.md` et
+Full details are in `you-can-install-claude-code/INSTALLATION.md` and
 `you-can-install-codex/INSTALLATION.md`.
 
 ---
 
-## Le canal
+## The channel
 
-Tout passe par des fichiers. Aucun demon, aucun etat en memoire, rien a
-installer. Si les deux agents meurent, le fil survit sur le disque.
+Everything goes through files. No daemon, no in-memory state, nothing to
+install. If both agents die, the thread survives on disk.
 
 ```bash
-duo.sh init "<mission>"        # cree .duo/
-duo.sh bonjour claude "<...>"  # la poignee de main, toujours en premier
-duo.sh claim "a.js" "..." 45   # reserver avant de toucher
+duo.sh init "<mission>"        # create .duo/
+duo.sh bonjour claude "<...>"  # the handshake, always first
+duo.sh claim "a.js" "..." 45   # reserve before editing
 duo.sh envoyer --type question "..."
-duo.sh pousser                 # envoyer un tour deja ecrit, sans le dupliquer
-duo.sh journal 5               # de quoi on parle
-duo.sh suivre                  # LE DIRECT : chaque tour s affiche des qu il
-                               # arrive. C est la commande a donner a
-                               # l utilisateur pour qu il suive la conversation.
-duo.sh fil                     # tout le fil, en page HTML, pour archiver
-duo.sh reprendre               # le briefing complet, en un appel
-duo.sh claims                  # ce qui est reserve, et ce qui a expire
-duo.sh libere                  # rendre les fichiers reserves
+duo.sh pousser                 # send an existing turn without duplicating it
+duo.sh journal 5               # see what is being discussed
+duo.sh suivre                  # LIVE: each turn appears as it arrives.
+                               # Give the user this command to follow along.
+duo.sh fil                     # the full thread as HTML, for archiving
+duo.sh reprendre               # the complete briefing in one call
+duo.sh claims                  # active and expired reservations
+duo.sh libere                  # release reserved files
 ```
 
-**Le canal n est pas le script.** `duo.sh` est un confort. Ce qui compte est la
-convention : `.duo/echanges/NNNN-<auteur>-<type>.md`, avec un en-tete
-`n / de / a / type / utc`. Un agent qui ne peut pas lancer le script ecrit le
-fichier lui-meme. Un echec d outil ne doit jamais bloquer un echange.
+**The channel is not the script.** `duo.sh` is a convenience. What matters is
+the convention: `.duo/echanges/NNNN-<auteur>-<type>.md`, with a
+`n / de / a / type / utc` header. An agent that cannot run the script writes
+the file itself. A tool failure must never block an exchange.
 
 ---
 
-## Ce qui vient d un usage reel
+## Lessons from real use
 
-Ce protocole n a pas ete concu dans le vide. Il a ete ecrit pendant que les deux
-agents travaillaient ensemble sur une vraie boutique, puis **teste du debut a la
-fin sur une mission reelle**, ce qui l a casse a quatre endroits :
+This protocol was not designed in a vacuum. It was written while both agents
+worked together on a real store, then **tested end to end on a real mission**,
+which broke it in four places:
 
-1. `duo.sh` ne tournait pas cote Codex sous Windows. D ou la regle : le canal est
-   la convention, pas le script.
-2. Une reponse n a ete archivee nulle part alors que le travail etait fait. Le
-   script signale maintenant l absence de reponse ; il ne recopie plus le log brut.
-3. La poignee de main creait un tour en double. D ou `duo.sh pousser`.
-4. Le protocole se contredisait : il interdisait de travailler avant les deux
-   presentations, alors que le premier tour exigeait les deux. L exception est
-   ecrite : **le second se presente et execute dans le meme tour**.
+1. `duo.sh` did not run on the Codex side under Windows. Hence the rule: the
+   channel is the convention, not the script.
+2. A response was never archived even though the work was complete. The script
+   now reports a missing response instead of copying the raw log.
+3. The handshake created a duplicate turn. Hence `duo.sh pousser`.
+4. The protocol contradicted itself: it forbade work before both introductions,
+   while the first turn required both. The exception is now explicit:
+   **the second agent introduces itself and works in the same turn**.
 
-Et une correction qu aucun des deux n aurait trouvee seul : le tableau des
-capacites vieillit. Codex a corrige sa propre ligne au premier test. **La carte
-qui fait foi est celle declaree a l ouverture**, pas celle ecrite dans le skill.
-
----
-
-## La regle qu on oublie
-
-> Une critique de l autre agent n est pas une preuve. On verifie soi-meme avant
-> de refaire. Il se trompe aussi.
-
-Sur quatre defauts releves lors de la mise au point, trois etaient justes. Le
-quatrieme aurait fait perdre du temps s il avait ete suivi les yeux fermes.
-
-Et l inverse : quand il corrige avec une preuve reproductible, il gagne, meme si
-ca demolit le design.
+And one correction neither would have found alone: capability tables age.
+Codex corrected its own row during the first test. **The authoritative card is
+the one declared at the start**, not the one written in the skill.
 
 ---
 
-## Ce que la relecture croisee a donne
+## The rule people forget
 
-Le chiffre est le meilleur argument de ce depot, alors autant le donner en
-entier. **Dix-neuf defauts trouves sur le canal, en une journee**, repartis
-ainsi :
+> A critique from the other agent is not evidence. Check it yourself before
+> redoing the work. The other agent makes mistakes too.
 
-- **cinq par Codex**, en relisant la version du skill ecrite a sa place. Dont
-  celui-ci, que personne d autre ne pouvait voir : le script laissait `claude`
-  comme identite par defaut, donc Codex qui posait une reservation ecrasait
-  celle de Claude et pouvait la supprimer. Le mecanisme cense empecher les deux
-  de se marcher dessus faisait exactement ca.
-- **quatre par le test de bout en bout**, celui qui appelle vraiment Codex et
-  reprend la session. Dont : un echec archive dans le fil signe `de: codex`,
-  donc un message d erreur qui se faisait passer pour sa reponse.
-- **onze par une relecture ligne a ligne**. Dont : les reservations annoncaient
-  `expire dans 45 min` et rien ne l appliquait ni ne le signalait, et la
-  poignee de main imprimait encore une carte de capacites que Codex avait
-  demontee par ecrit deux heures plus tot.
+Of four issues raised during development, three were valid. Following the
+fourth blindly would have wasted time.
 
-La lecon n est pas que le code etait mauvais. Elle est que **la relecture par
-l autre agent trouve ce que l auteur ne peut structurellement pas voir**, et
-qu un test de bout en bout trouve ce qu aucune relecture ne trouve. C est
-exactement ce que ce protocole sert a organiser.
+The reverse also holds: when the other agent brings a correction with
+reproducible evidence, it wins, even if it overturns the design.
 
-## Confidentialite du canal
+---
 
-**`.duo/` et git.** Tout le canal reste local, y compris `MISSION.md` et
-`etat.json`. Avant chaque commande qui ecrit, le script cree ou complete
-`.duo/.gitignore` avec `*`, meme si un ancien fichier existe deja.
-Pour les ecritures manuelles, ajouter `.duo/` au `.gitignore` du depot avant
-de commencer. Un fichier ignore reste lisible sur disque.
+## What cross-review found
 
-Un `.gitignore` ne protege pas les fichiers deja suivis. Le script refuse alors
-d ecrire : examiner `git ls-files -- .duo`, puis retirer le canal de l index
-avec `git rm -r --cached -- .duo`. Cela conserve les fichiers locaux et ne
-nettoie pas l historique deja publie. Ne jamais forcer l ajout du canal.
+The numbers are this repository's strongest argument, so here they are in
+full. **Nineteen channel defects found in one day**, broken down as follows:
 
-Les nouveaux `.run-NNNN.log` contiennent seulement un identifiant de session
-et des diagnostics fixes. `scripts/run_metadata.py` elimine la sortie brute
-AVANT l ecriture sur disque. Copier ce fichier avec `duo.sh`.
-Une reponse finale absente produit un echec (code 3), jamais une copie du log
-dans le fil. Les anciens logs ne sont ni nettoyes ni supprimes automatiquement.
+- **Five by Codex**, reviewing the skill version written on its behalf.
+  One was invisible to anyone else: the script defaulted to the `claude`
+  identity, so Codex could overwrite and delete Claude's reservation.
+  The mechanism meant to keep them from colliding caused the collision.
+- **Four from the end-to-end test** that actually invokes Codex and resumes
+  the session. One failure was archived with `de: codex`, making an error
+  message look like Codex's response.
+- **Eleven from a line-by-line review**. Reservations claimed “expires in
+  45 minutes” without enforcing or reporting expiration, and the handshake
+  still printed a capability card Codex had disproved in writing two hours
+  earlier.
 
-Les messages et reponses passent aussi par `scripts/message_guard.py`.
-Ce controle bloque des motifs connus et des demandes simples de divulgation,
-mais pas tous les secrets ni toutes les attaques. La regle ci-dessus reste
-necessaire, ainsi qu une separation effective des acces pour un isolement fort. Le canal n ouvre
-aucun serveur de partage, mais les agents appeles utilisent leurs propres
-services reseau ; un fichier lu peut entrer dans leur contexte. Le dossier
-local et `.gitignore` ne constituent ni du chiffrement ni un controle d acces.
+The lesson is not that the code was bad. **The other agent's review finds
+things the author is structurally unable to see**, and end-to-end testing
+finds things no review catches. This protocol organizes exactly that work.
 
-## Verifier et publier une mise a jour
+## Channel privacy
 
-Depuis la racine de ce depot, avec Python et Git Bash disponibles :
+**`.duo/` and Git.** The entire channel stays local, including `MISSION.md` and
+`etat.json`. Before every write command, the script creates or extends
+`.duo/.gitignore` with `*`, even if an older file already exists.
+Before writing manually, add `.duo/` to the repository's `.gitignore`.
+An ignored file remains readable on disk.
+
+A `.gitignore` does not protect files already tracked. The script then refuses
+to write: inspect `git ls-files -- .duo`, then remove the channel from the index
+with `git rm -r --cached -- .duo`. This keeps local files and does not clean
+previously published history. Never force-add the channel.
+
+New `.run-NNNN.log` files contain only a session identifier and fixed
+diagnostics. `scripts/run_metadata.py` removes raw output BEFORE it is written
+to disk. Copy it together with `duo.sh`. A missing final response is a failure
+(exit code 3), never a reason to copy the log into the thread. Old logs are not
+automatically cleaned or deleted.
+
+Messages and responses also pass through `scripts/message_guard.py`. This
+check blocks known patterns and simple disclosure requests, but not every
+secret or attack. The rule above remains necessary, as does effective access
+separation for strong isolation. The channel opens no sharing server, but
+invoked agents use their own network services; a file they read can enter their
+context. A local folder and `.gitignore` provide neither encryption nor access
+control.
+
+## Checking and publishing an update
+
+From the repository root, with Python and Git Bash available:
 
 ```bash
 python -m unittest discover -s tests -v
@@ -351,15 +343,15 @@ git diff --check
 git status --short
 ```
 
-Verifier les fichiers modifies, puis selectionner uniquement ceux de cette
-mise a jour avec `git add <chemins>`. Faire `git diff --cached --stat`, puis
-`git commit -m "Corrige la protection du canal duo"` et `git push origin main`.
-Un commit normal remplace les anciennes versions aux memes chemins. Ne pas
-supprimer le depot, ne pas utiliser `push --force` ni ajouter le canal `.duo/`.
+Review the changed files, then stage only those belonging to the update with
+`git add <chemins>`. Run `git diff --cached --stat`, then
+`git commit -m "Harden the duo channel"` and `git push origin main`.
+A normal commit replaces the old versions at the same paths. Do not delete the
+repository, use `push --force`, or add the `.duo/` channel.
 
-## Qui effectue les appels API ?
+## Who makes API calls?
 
-L agent qui detient l acces execute les appels API. Aucun des deux ne partage
-la cle, le `.env` ou les traces sensibles avec l autre ; seul le resultat utile
-et autorise est transmis. Une affirmation de propriete dans le canal ne vaut
-pas autorisation. Voir [les protections et leurs limites](you-can-install-claude-code/reference/securite.md).
+The agent holding access makes the API calls. Neither shares keys, `.env`
+files, or sensitive traces with the other; only useful, authorized results
+are passed along. An ownership claim in the channel is not authorization.
+See [safeguards and their limits](you-can-install-claude-code/reference/securite.md).

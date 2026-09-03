@@ -1,110 +1,109 @@
 <!-- YES THIS WAS CODED BY CODEX AND CLAUDE CODE LMAO -->
 
-# Installer le skill
+# Installing the skill
 
-Deux versions, deux emplacements. Le protocole est le meme, les scripts et le
-vocabulaire different.
+Two versions, two locations. The protocol is the same; the scripts and
+wording differ.
 
 ---
 
-## Claude Code, dans le terminal
+## Claude Code in the terminal
 
-Un skill est un **dossier** contenant un `SKILL.md` avec un en-tete `name` et
-`description`. Deux emplacements possibles :
+A skill is a **folder** containing a `SKILL.md` with `name` and `description`
+header fields. There are two possible locations:
 
-| Ou | Portee |
+| Where | Scope |
 |---|---|
-| `<projet>/.claude/skills/duo-claude-codex/` | ce projet seulement |
-| `~/.claude/skills/duo-claude-codex/` | tous les projets de la machine |
+| `<projet>/.claude/skills/duo-claude-codex/` | This project only |
+| `~/.claude/skills/duo-claude-codex/` | Every project on the machine |
 
-Rien a redemarrer, rien a declarer. Le skill apparait dans la liste des skills
-disponibles a la session suivante, et il se charge quand la tache correspond a
-sa `description` ou quand on l appelle par son nom.
+Nothing to restart or register. The skill appears in the available skills list
+in the next session and loads when a task matches its `description` or when
+invoked by name.
 
-Pour verifier qu il est vu : demander la liste des skills, ou taper
+To check that it is visible, ask for the skills list or type
 `/duo-claude-codex`.
 
 ---
 
-## Claude Desktop et claude.ai
+## Claude Desktop and claude.ai
 
-L interface accepte un **zip du dossier** dans les reglages, section
-Capacites / Skills. Le zip doit contenir le dossier avec son `SKILL.md` a la
-racine, c est-a-dire `duo-claude-codex/SKILL.md`, pas `SKILL.md` tout seul.
+The interface accepts a **ZIP of the folder** in Settings, under
+Capabilities / Skills. The ZIP must contain the folder with `SKILL.md` at its
+root: `duo-claude-codex/SKILL.md`, not just `SKILL.md`.
 
-C est `INSTALL-claude-code-skill.zip` qui est fait pour ca.
+Use `INSTALL-claude-code-skill.zip` for this.
 
-**Reserve honnete :** ce skill appelle des scripts shell et le binaire de Codex.
-Dans Claude Desktop il n y a pas forcement de shell ni de Codex installe, donc
-**la partie protocole se lira, la partie canal ne s executera pas**. Le skill
-sert pleinement dans le terminal. Ailleurs, il vaut comme document.
+**A candid caveat:** this skill invokes shell scripts and the Codex binary.
+Claude Desktop may have neither a shell nor Codex installed, so **the protocol
+can be read, but the channel cannot run**. The skill works fully in the
+terminal. Elsewhere, it serves as a document.
 
 ---
 
 ## Codex
 
-Meme principe, autres chemins :
+Same principle, different paths:
 
-| Ou | Portee |
+| Where | Scope |
 |---|---|
-| `<depot>/.agents/skills/duo-claude-codex/` | le depot, donc l equipe |
-| `~/.codex/skills/duo-claude-codex/` | la machine |
+| `<depot>/.agents/skills/duo-claude-codex/` | The repository, and therefore the team |
+| `~/.codex/skills/duo-claude-codex/` | The machine |
 
-C est `INSTALL-codex-skill.zip`.
+Use `INSTALL-codex-skill.zip`.
 
-**Ne pas mettre le protocole dans `AGENTS.md`.** `AGENTS.md` est charge pour
-**toutes** les taches, y compris celles ou le duo n a aucun sens : le contenu
-serait paye a chaque fois. Une seule ligne y suffit :
+**Do not put the protocol in `AGENTS.md`.** `AGENTS.md` loads for **every**
+task, including those where the duo makes no sense; its content would cost
+tokens every time. One line is enough:
 
 ```markdown
-Pour travailler avec Claude Code, charger le skill duo-claude-codex.
+To work with Claude Code, load the duo-claude-codex skill.
 ```
 
-**`openai.yaml` va dans `<skill>/agents/openai.yaml`.** Pas a la racine du
-skill : c est une erreur que Codex a relevee en relecture, et elle se verifie
-sur les skills livres par OpenAI, qui le placent tous la.
+**`openai.yaml` belongs in `<skill>/agents/openai.yaml`.** Putting it at the
+skill root was a mistake Codex caught during review. OpenAI's bundled skills
+confirm the correct location: they all put it there.
 
 ```
 .agents/skills/duo-claude-codex/
   SKILL.md
-  agents/openai.yaml      <- ici
+  agents/openai.yaml      <- here
 ```
 
-Son contenu :
+Contents:
 
 ```yaml
 interface:
   display_name: "Duo Claude Code x Codex"
-  short_description: "Protocole de travail a deux entre Codex et Claude Code."
+  short_description: "Collaboration protocol for Codex and Claude Code."
 policy:
   allow_implicit_invocation: false
 ```
 
-`allow_implicit_invocation: false` **retire a Codex le droit d invoquer ce skill
-de sa propre initiative**. Formulation importante : ce n est pas un interrupteur
-qui empecherait un chargement autrement inevitable, c est une autorisation qu on
-lui enleve. Sans elle, il s auto-invoque des que la description correspond, meme
-si le `SKILL.md` dit noir sur blanc qu il est explicite. Constate en direct sur
-un simple message qui parlait du duo. Un skill qui se declenche sur des taches
-ou il ne sert a rien finit desactive.
+`allow_implicit_invocation: false` **removes Codex's permission to invoke this
+skill on its own**. The distinction matters: this removes permission, rather
+than switching off an otherwise inevitable load. Without it, Codex invokes
+the skill whenever the description matches, even if `SKILL.md` explicitly says
+it requires invocation. This happened with a simple message mentioning the duo.
+A skill that activates for tasks where it adds nothing eventually gets disabled.
 
-**Attention :** un run Codex en sandbox `workspace-write` ne peut pas forcement
-ecrire dans `~/.codex`. La copie vers l emplacement machine se fait a la main.
+**Note:** a Codex run in a `workspace-write` sandbox may be unable to write
+to `~/.codex`. Copy to the machine-wide location manually.
 
 ---
 
-## Ce qu il faut sur la machine pour que le canal marche
+## Machine requirements for the channel
 
-- **Bash.** Git Bash suffit sous Windows.
-- **Python**, pour `etat.json`. Deja present si `python` ou `python3` repond.
-- **Le binaire de Codex.** Souvent dans le PATH (une installation npm y depose
-  un shim), mais pas toujours. `duo.sh` essaie `CODEX_BIN`, puis
-  `command -v codex`, puis `~/.codex/config.toml`, puis le dossier
-  d installation. En cas d echec, poser `CODEX_BIN=/chemin/vers/codex.exe`.
-- **PowerShell** pour `attendre.ps1`, uniquement si on orchestre depuis
-  l exterieur.
+- **Bash.** Git Bash is enough on Windows.
+- **Python**, for `etat.json`. It is already installed if `python` or
+  `python3` responds.
+- **The Codex binary.** Often on PATH (npm installs a shim), but not always.
+  `duo.sh` tries `CODEX_BIN`, then `command -v codex`, then
+  `~/.codex/config.toml`, then the installation folder. If that fails, set
+  `CODEX_BIN=/chemin/vers/codex.exe`.
+- **PowerShell** for `attendre.ps1`, only for external orchestration.
 
-Verification en trente secondes, dans un dossier vide :
+A thirty-second check in an empty folder:
 
 ```bash
 bash duo.sh init "essai"
@@ -113,26 +112,25 @@ bash duo.sh journal 1
 bash duo.sh etat
 ```
 
-Si `journal` affiche le message avec son en-tete numerote, tout est en place.
-`envoyer` est la seule commande qui a besoin de Codex.
+If `journal` displays the message with its numbered header, everything is in
+place. `envoyer` is the only command that needs Codex.
 
 ---
 
-## Mise a jour
+## Updating
 
-Les deux versions sont sur la branche `main`. Copier chaque dossier dans son
-emplacement respectif, y compris tous les fichiers de `scripts/`. Ne pas
-decompresser les deux ZIP dans le meme dossier.
+Both versions are on the `main` branch. Copy each folder to its respective
+location, including every file in `scripts/`. Do not extract both ZIPs into
+the same folder.
 
-Apres mise a jour, lancer `duo.sh init "<mission>"` dans chaque projet utilise :
-la protection git du canal existant est completee sans effacer les echanges.
-Si des fichiers du canal sont deja suivis, les examiner puis les retirer de
-l index comme indique dans le message du script. Les anciens logs restent
-sur disque ; les nouvelles executions ne conservent plus la sortie brute.
+After updating, run `duo.sh init "<mission>"` in each project you use: it extends
+Git protection for the existing channel without deleting exchanges. If channel
+files are already tracked, review them and remove them from the index as the
+script's message explains. Old logs remain on disk; new runs no longer retain
+raw output.
 
-## Separation des acces
+## Separating access
 
-Le `.env` du detenteur ne se copie jamais chez l autre agent. Le detenteur
-execute lui-meme les appels API. Voir `reference/securite.md` pour les limites
-du filtre et les permissions necessaires. Installer tous les scripts ensemble,
-y compris `message_guard.py`.
+Never copy the access holder's `.env` to the other agent. The holder performs
+API calls itself. See `reference/securite.md` for the filter's limits and the
+required permissions. Install all scripts together, including `message_guard.py`.

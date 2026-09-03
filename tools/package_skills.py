@@ -22,7 +22,7 @@ def build():
             assert archive.testzip() is None
             for name in files:
                 assert archive.read('duo-claude-codex/' + name) == (source / name).read_bytes()
-        print(f'{target.name}: {len(files)} fichiers verifies')
+        print(f'{target.name}: {len(files)} files verified')
 
 if __name__ == '__main__':
     build()

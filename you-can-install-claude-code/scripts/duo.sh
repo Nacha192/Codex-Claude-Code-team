@@ -1,50 +1,50 @@
 #!/usr/bin/env bash
-# duo.sh - le canal entre Claude Code et Codex.
+# duo.sh - the channel between Claude Code and Codex.
 #
-# Tout passe par des fichiers. Aucun demon, aucun etat en memoire, rien a
-# installer. Si les deux agents meurent, le fil survit sur le disque et
-# n importe qui peut l ouvrir et lire de quoi ils parlaient.
+# Everything goes through files. No daemon, no in-memory state, nothing to
+# install. If both agents die, the thread survives on disk, and anyone
+# can open it and read what they were discussing.
 #
-#   duo.sh init "<mission>"          cree .duo/ (mission, etat, echanges, claims)
+#   duo.sh init "<mission>"          create .duo/ (mission, state, exchanges, claims)
 #   duo.sh bonjour <qui> "<mission>" [carte]
-#                                    la poignee de main. La carte est la liste
-#                                    des outils REELS de la session : elle se
-#                                    regarde, elle ne se recopie pas.
-#                                    Toujours en premier, des deux cotes.
-#   duo.sh envoyer [options] "<msg>" ecrit un tour et appelle Codex
-#   duo.sh ecrire  [options] "<msg>" ecrit un tour SANS appeler Codex
-#   duo.sh claim "<fichiers>" "<but>" [minutes]   reserve des fichiers
-#   duo.sh claims                    ce qui est reserve, par qui, jusqu a quand
-#   duo.sh libere                    rend les fichiers qu on avait reserves
-#   duo.sh reprendre                 le briefing complet : mission, claims,
-#                                    3 derniers tours. A lancer en premier
-#                                    quand on reprend une mission en cours.
-#   duo.sh pousser                   envoie le dernier tour DEJA ecrit, sans
-#                                    en creer un double
-#   duo.sh journal [n]               les n derniers tours dans le terminal
-#   duo.sh suivre                    le fil EN DIRECT dans le terminal, chaque
-#                                    tour s affiche des qu il arrive. Ctrl-C
-#                                    pour sortir. A proposer a l utilisateur.
-#   duo.sh fil                       tout le fil, en page HTML, pour archiver
-#   duo.sh etat                      mission, pilote, session Codex, dernier tour
+#                                    the handshake. The card lists the session's
+#                                    ACTUAL tools: inspect them rather than
+#                                    copying a list.
+#                                    Always first, on both sides.
+#   duo.sh envoyer [options] "<msg>" write a turn and invoke Codex
+#   duo.sh ecrire  [options] "<msg>" write a turn WITHOUT invoking Codex
+#   duo.sh claim "<fichiers>" "<but>" [minutes]   reserve files
+#   duo.sh claims                    reserved files, owners, and expiration times
+#   duo.sh libere                    release previously reserved files
+#   duo.sh reprendre                 the full briefing: mission, claims,
+#                                    last 3 turns. Run this first when
+#                                    resuming an ongoing mission.
+#   duo.sh pousser                   send the last ALREADY written turn
+#                                    without duplicating it
+#   duo.sh journal [n]               the last n turns in the terminal
+#   duo.sh suivre                    the LIVE thread in the terminal; each
+#                                    turn appears as it arrives. Ctrl-C
+#                                    to exit. Offer this to the user.
+#   duo.sh fil                       the full thread as HTML, for archiving
+#   duo.sh etat                      mission, lead, Codex session, last turn
 #
-#   options de envoyer/ecrire :
+#   envoyer/ecrire options:
 #     --type <proposition|question|decision|preuve|resultat|blocage>
 #     --de <claude|codex>   --a <claude|codex>
 #     --fichiers "a.js b.md"   --reply <n>   --attendu "<ce qu on attend>"
 #
-# Variables : DUO_QUI=claude|codex (obligatoire pour claim et libere),
+# Variables: DUO_QUI=claude|codex (required for claim and libere),
 #             DUO_RACINE, CODEX_BIN, NO_COLOR.
 #
-# Codes de sortie : 0 ok, 1 usage, 2 Codex introuvable, 3 Codex a echoue.
-# Code 4 : controle de securite refuse, ne pas contourner.
-# Le 3 compte : l appelant doit pouvoir continuer sans lui.
+# Exit codes: 0 ok, 1 usage, 2 Codex not found, 3 Codex failed.
+# Code 4: security check rejected; do not bypass.
+# Code 3 matters: the caller must be able to continue without Codex.
 #
-# Deux choix de conception, tous deux issus d une erreur reelle :
-#   - le NUMERO fait foi, pas l horodatage. Deux ecritures peuvent tomber dans
-#     la meme seconde, et deux horloges ne sont jamais parfaitement d accord.
-#   - on ecrit dans un fichier temporaire puis on renomme. Un lecteur ne voit
-#     jamais un message a moitie ecrit.
+# Two design choices, both prompted by real mistakes:
+#   - the NUMBER is authoritative, not the timestamp. Two writes can occur
+#     in the same second, and two clocks never agree perfectly.
+#   - write to a temporary file, then rename it. Readers never see
+#     a half-written message.
 
 set -uo pipefail
 umask 077
@@ -61,16 +61,16 @@ ETAT="$DUO/etat.json"
 PY=$(command -v python || command -v python3 || echo python)
 SCRIPTS=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
-# Tous les champs transmis sont controles avant ecriture et avant envoi.
+# All transmitted fields are checked before writing and sending.
 verifier_texte() {
   printf '%s\0' "$@" | "$PY" "$SCRIPTS/message_guard.py" check
 }
 
-# Codex PEUT etre dans le PATH (installation npm : un shim `codex` y atterrit),
-# mais ce n est pas garanti. Le dossier d installation, lui, contient un hash
-# qui change a chaque mise a jour, et plusieurs versions peuvent coexister :
-# ne jamais coder le chemin en dur, et garder le glob en DERNIER recours.
-# Verifie le 2026-09-02 par Codex : `command -v codex` resolvait bien.
+# Codex MAY be on PATH (npm installs a codex shim there), but this is not
+# guaranteed. The installation folder contains a hash that changes with
+# each update, and multiple versions may coexist: never hardcode the path,
+# and keep the glob as a LAST resort.
+# Verified by Codex on 2026-09-02: `command -v codex` resolved successfully.
 trouver_codex() {
   if [ -n "${CODEX_BIN:-}" ]; then
     [ -x "$CODEX_BIN" ] || return 1
@@ -88,8 +88,8 @@ trouver_codex() {
 
 utc() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
-# Protection appliquee avant chaque commande qui ecrit, meme sans init.
-# Le dernier * neutralise aussi les anciennes exceptions MISSION/etat.
+# Protection applies before every write command, even without init.
+# The final * also overrides old MISSION/etat exceptions.
 proteger_canal() {
   mkdir -p "$DUO" || return 1
   "$PY" - "$DUO/.gitignore" <<'PYEOF'
@@ -101,20 +101,20 @@ if not t.rstrip().endswith("# duo: canal local prive\n*"):
         f.write("\n# duo: canal local prive\n*\n")
 PYEOF
   [ $? -eq 0 ] || return 1
-  # Un ignore ne retire PAS les fichiers deja suivis de l index.
+  # Ignoring a file does NOT remove already tracked files from the index.
   if git -C "$RACINE" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     local suivis
     suivis=$(git -C "$RACINE" ls-files -- .duo) || return 1
     if [ -n "$suivis" ]; then
-      echo "duo: .duo contient des fichiers deja suivis par git." >&2
-      echo "Verifier puis retirer .duo de l index avec git rm -r --cached -- .duo." >&2
-      echo "Les fichiers locaux restent sur disque ; l historique git reste a examiner." >&2
+      echo "duo: .duo contains files already tracked by git." >&2
+      echo "Review, then remove .duo from the index with git rm -r --cached -- .duo." >&2
+      echo "Local files remain on disk; git history still needs review." >&2
       return 1
     fi
   fi
 }
 
-# --- etat.json : lu et ecrit par python, jamais par sed. -------------------
+# --- etat.json: read and written by Python, never sed. --------------------
 etat_lire() {
   [ -f "$ETAT" ] || { echo ""; return 0; }
   "$PY" -c "import json,sys
@@ -122,28 +122,28 @@ try: print(json.load(open(sys.argv[1],encoding='utf-8')).get(sys.argv[2],''))
 except Exception: sys.exit(1)" "$ETAT" "$1" 2>/dev/null
 }
 
-# Lecture, modification, ecriture : deux appels simultanes se perdaient une
-# cle, et os.replace levait un PermissionError sous Windows quand l autre
-# tenait encore le fichier. Un verrou par mkdir, plus une reprise sur echec.
+# Read, modify, write: concurrent calls used to lose a key, and os.replace
+# raised PermissionError on Windows while the other call still held the file.
+# Use a mkdir lock, plus retries on failure.
 etat_ecrire() {
   "$PY" - "$ETAT" "$1" "$2" <<'PYEOF'
 import json,sys,os,tempfile,time,errno
 p,k,v = sys.argv[1],sys.argv[2],sys.argv[3]
 verrou = p + ".verrou"
 pris = False
-for _ in range(100):                       # 5 s au plus
+for _ in range(100):                       # at most 5 s
     try:
         os.mkdir(verrou); pris = True; break
     except OSError as e:
         if e.errno != errno.EEXIST: break
         time.sleep(0.05)
 if not pris:
-    sys.exit("duo: verrou etat.json indisponible, aucune modification")
+    sys.exit("duo: etat.json lock unavailable; no changes made")
 try:
     d = {}
     if os.path.exists(p):
         try: d = json.load(open(p, encoding="utf-8"))
-        except Exception: sys.exit("duo: etat.json illisible, aucune modification")
+        except Exception: sys.exit("duo: etat.json unreadable; no changes made")
     if k == "__init__":
         defaults = {'mission': v, 'pilote': '', 'session_codex': '',
                     'dernier_tour': '0000', 'statut': 'ouverte'}
@@ -156,14 +156,14 @@ try:
     fd, tmp = tempfile.mkstemp(dir=os.path.dirname(p) or ".")
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         json.dump(d, f, ensure_ascii=False, indent=2)
-    for essai in range(20):                # Windows garde le fichier ouvert
+    for essai in range(20):                # Windows keeps the file open
         try:
             os.replace(tmp, p); break
         except PermissionError:
             time.sleep(0.05)
     else:
         os.unlink(tmp)
-        sys.exit("duo: etat.json occupe, cle non ecrite")
+        sys.exit("duo: etat.json busy; key not written")
 finally:
     if pris:
         try: os.rmdir(verrou)
@@ -171,12 +171,11 @@ finally:
 PYEOF
 }
 
-# Le numero suivant se deduit des fichiers presents : pas de compteur a
-# desynchroniser, et un fichier supprime a la main ne casse rien.
-# Le numero est une ressource partagee : deux agents qui ecrivaient en meme
-# temps calculaient le meme, et un des deux messages disparaissait. Mesure :
-# 8 pertes sur 10 envois simultanes. On reserve donc le numero par un mkdir,
-# atomique partout, Windows compris.
+# Derive the next number from existing files: no counter to desynchronize,
+# and manually deleting a file breaks nothing.
+# The number is shared: concurrent writers calculated the same one,
+# making one message disappear. Measured: 8 losses in 10 simultaneous sends.
+# Reserve the number with mkdir, which is atomic everywhere, including Windows.
 prochain_numero() {
   local n
   n=$( { ls -1 "$ECHANGES" 2>/dev/null | sed -n 's/^\([0-9]\{4,\}\)-.*/\1/p'
@@ -191,7 +190,7 @@ reserver_numero() {
     n=$(prochain_numero)
     if mkdir "$NUMEROS/$n" 2>/dev/null; then printf '%s' "$n"; return 0; fi
     t=$((t+1))
-    [ "$t" -gt 200 ] && { echo "duo: impossible de reserver un numero" >&2; return 1; }
+    [ "$t" -gt 200 ] && { echo "duo: unable to reserve a number" >&2; return 1; }
   done
 }
 
@@ -203,41 +202,41 @@ cmd_init() {
     cat > "$MISSION" <<EOF
 # Mission
 
-## Ce qu on fait
-${intitule:-(une phrase, pas un paragraphe)}
+## What we are doing
+${intitule:-(one sentence, not a paragraph)}
 
-## Le critere de reussite
-(verifiable par quelqu un d autre. Si vous ne savez pas l ecrire,
- la mission n est pas prete et le duo va tourner en rond.)
+## Success criterion
+(verifiable by someone else. If you cannot write it down,
+ the mission is not ready and the duo will go in circles.)
 
-## Qui pilote, et pourquoi sur CETTE tache
-(metier, historique, connecteurs -> claude
- image, navigateur, inspection visuelle -> codex
- code pur -> celui qui a deja le contexte)
+## Who leads, and why for THIS task
+(business context, history, connectors -> claude
+ images, browser, visual inspection -> codex
+ pure code -> whoever already has the context)
 
-## Repartition
-| Qui | Fait | Ne touche pas a |
+## Division of work
+| Who | Does | Must not touch |
 |-----|------|-----------------|
 | claude | | |
 | codex  | | |
 
 ## Desaccords
-(on n efface jamais un desaccord. On ecrit les deux positions, qui a tranche,
- et sur quelle preuve.)
+(Disagreements: never erase one. Record both positions, who decided,
+ and the evidence behind the decision.)
 EOF
-    echo "cree : $MISSION"
+    echo "created: $MISSION"
   fi
   etat_ecrire __init__ "${intitule:-sans titre}" || return 1
-  echo "canal pret dans $DUO"
+  echo "channel ready in $DUO"
 }
 
-# --- ecrire un tour -------------------------------------------------------
+# --- write a turn --------------------------------------------------------
 TYPE="proposition"; DE="${DUO_QUI:-claude}"; A="codex"; FICHIERS=""; REPLY=""; ATTENDU=""; SANS_TOUR=0
 [ "$DE" = "codex" ] && A="claude"
-# Une option sans valeur faisait planter le script sur "unbound variable"
-# a cause de set -u, avec un message que personne ne peut interpreter.
+# An option without a value used to crash with "unbound variable" because
+# of set -u, producing a message nobody could interpret.
 besoin_valeur() {
-  [ $# -ge 2 ] || { echo "duo: l option $1 attend une valeur." >&2; return 1; }
+  [ $# -ge 2 ] || { echo "duo: option $1 requires a value." >&2; return 1; }
 }
 
 lire_options() {
@@ -262,14 +261,14 @@ lire_options() {
   if [ "$destinataire_explicite" = 0 ]; then
     [ "$DE" = codex ] && A=claude || A=codex
   fi
-  case "$DE:$A" in claude:codex|codex:claude) ;; *) echo "duo: auteurs invalides" >&2; return 1 ;; esac
-  [[ "$TYPE" =~ ^[a-z][a-z0-9_-]*$ ]] || { echo "duo: type invalide" >&2; return 1; }
+  case "$DE:$A" in claude:codex|codex:claude) ;; *) echo "duo: invalid authors" >&2; return 1 ;; esac
+  [[ "$TYPE" =~ ^[a-z][a-z0-9_-]*$ ]] || { echo "duo: invalid type" >&2; return 1; }
   local champ
   for champ in "$FICHIERS" "$REPLY" "$ATTENDU"; do
     [[ "$champ" != *$'\n'* && "$champ" != *$'\r'* ]] || {
-      echo "duo: une metadonnee doit tenir sur une ligne." >&2; return 1; }
+      echo "duo: metadata must fit on one line." >&2; return 1; }
   done
-  [[ -z "$REPLY" || "$REPLY" =~ ^[0-9]+$ ]] || { echo "duo: reply invalide" >&2; return 1; }
+  [[ -z "$REPLY" || "$REPLY" =~ ^[0-9]+$ ]] || { echo "duo: invalid reply" >&2; return 1; }
   RESTE="$*"
 }
 
@@ -279,8 +278,8 @@ ecrire_tour() {
   mkdir -p "$ECHANGES" || return 1
   n=$(reserver_numero) || return 1
   f="$ECHANGES/$n-$DE-$TYPE.md"
-  # nom de temporaire UNIQUE : deux ecritures simultanees partageaient le meme
-  # et se detruisaient l une l autre.
+  # UNIQUE temporary filename: concurrent writes used to share one and
+  # destroy each other.
   tmp="$f.$$-${RANDOM:-0}.partiel"
   {
     echo "---"
@@ -296,9 +295,9 @@ ecrire_tour() {
     echo
     printf '%s\n' "$corps"
   } > "$tmp"
-  # renommage atomique : jamais de lecture partielle. Verifie : un mv qui
-  # echoue passait inapercu et on annoncait un message qui n existait pas.
-  mv -f "$tmp" "$f" || { echo "duo: impossible d ecrire $f" >&2; rm -f "$tmp"; return 1; }
+  # Atomic rename prevents partial reads. Verified: a failed mv used to
+  # go unnoticed, and we announced a message that did not exist.
+  mv -f "$tmp" "$f" || { echo "duo: unable to write $f" >&2; rm -f "$tmp"; return 1; }
   etat_ecrire dernier_tour "$n" || return 1
   echo "$f"
 }
@@ -314,35 +313,35 @@ cmd_envoyer() {
   [ -z "$RESTE" ] && { echo "usage: duo.sh envoyer [options] \"message\"" >&2; return 1; }
 
   [ "$DE:$A" = "claude:codex" ] || {
-    echo "duo: envoyer appelle seulement Codex depuis Claude ; utiliser ecrire pour repondre." >&2; return 1; }
+    echo "duo: envoyer only invokes Codex from Claude; use ecrire to reply." >&2; return 1; }
   verifier_texte "$RESTE" "$FICHIERS" "$REPLY" "$ATTENDU" || return 4
   local sid; sid=$(etat_lire session_codex) || return 4
   if [ -n "$sid" ] && [[ ! "$sid" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
-    echo "duo: identifiant de session invalide, envoi refuse." >&2; return 4
+    echo "duo: invalid session identifier; send rejected." >&2; return 4
   fi
   local prompt
   prompt=$(printf '%s' "$RESTE" | "$PY" "$SCRIPTS/message_guard.py" envelope) || return 4
   local codex; codex=$(trouver_codex) || {
-    echo "codex introuvable. Pose CODEX_BIN=/chemin/vers/codex.exe" >&2; return 2; }
+    echo "codex not found. Set CODEX_BIN=/chemin/vers/codex.exe" >&2; return 2; }
 
-  local envoye="(tour deja ecrit)"
+  local envoye="(turn already written)"
   if [ "$SANS_TOUR" = "0" ]; then
     envoye=$(ecrire_tour "$RESTE") || {
-      echo "duo: le tour n a pas pu etre ecrit, on n appelle pas Codex." >&2; return 1; }
+      echo "duo: unable to write the turn; Codex will not be invoked." >&2; return 1; }
   fi
   TYPE="reponse"; DE="codex"; A="claude"; FICHIERS=""; ATTENDU=""
-  # Le numero de la reponse se RESERVE lui aussi : sinon la course revenait par
-  # la porte de derriere, la moitie corrigee seulement.
+  # RESERVE the response number too, or the race returns through the
+  # other path and the fix is only half complete.
   local n; n=$(reserver_numero) || return 1
   local sortie="$ECHANGES/$n-codex-reponse.md"
   local brouillon="$DUO/.reponse-$n.partiel"
 
-  # `codex exec resume --help` ne declare ni -C ni -s : les passer echoue.
-  # On fait donc le `cd` avant. Ce que resume herite exactement du sandbox
-  # d origine n est PAS documente : ne pas s appuyer dessus, verifier au besoin.
-  # `--last` devient ambigu des que deux runs tournent, d ou le session id.
-  # Un log PAR ENVOI : deux envoyer concurrents partageaient le meme fichier,
-  # donc l un lisait l erreur ou le session id de l autre.
+  # `codex exec resume --help` declares neither -C nor -s: passing them fails.
+  # Use cd first. Exactly what resume inherits from the original sandbox
+  # is NOT documented: do not rely on it; verify when needed.
+  # --last becomes ambiguous with two runs, hence the explicit session ID.
+  # One log PER SEND: concurrent envoyer calls used to share a file,
+  # so one read the other's error or session ID.
   local log="$DUO/.run-$n.log"
   local codes
   if [ -n "$sid" ]; then
@@ -357,13 +356,12 @@ cmd_envoyer() {
   local code=${codes[0]}
   [ "${codes[1]}" -eq 0 ] || code=3
 
-  # Codex imprime "session id: <uuid>" dans son en-tete de run. On s ancre sur
-  # L ETIQUETTE, jamais sur "le premier UUID du log" : un UUID peut apparaitre
-  # dans la reponse elle-meme, et le format de sortie n est pas un contrat.
-  # Dependance testee sur codex-cli 0.152.0. Si l ancre disparait, on le dit.
-  # Uniquement si le run a abouti : sinon on avertissait d un session id
-  # manquant alors que la vraie cause etait plus bas, et on brouillait le
-  # message utile.
+  # Codex prints "session id: <uuid>" in the run header. Match the LABEL,
+  # never "the first UUID in the log": a UUID may appear in the response,
+  # and the output format is not a contract.
+  # Dependency tested on codex-cli 0.152.0. Report a missing anchor.
+  # Only check after a successful run: otherwise a missing-session-ID
+  # warning used to obscure the actual failure reported further below.
   if [ -z "$sid" ] && [ $code -eq 0 ]; then
     local trouve
     trouve=$(grep -o 'session id:.*' "$log" | head -1 \
@@ -371,20 +369,20 @@ cmd_envoyer() {
     if [ -n "$trouve" ]; then
       etat_ecrire session_codex "$trouve"
     else
-      echo "duo: session id introuvable dans le log, le prochain envoi ouvrira une nouvelle session" >&2
+      echo "duo: session id not found in the log; the next send will open a new session" >&2
     fi
   fi
 
   if [ $code -eq 0 ] && [ -s "$brouillon" ]; then
     if ! "$PY" "$SCRIPTS/message_guard.py" file "$brouillon"; then
       rm -f "$brouillon"
-      echo "duo: reponse refusee avant publication dans le fil." >&2
+      echo "duo: response rejected before publication in the thread." >&2
       return 4
     fi
   fi
 
-  # Seule la reponse finale peut devenir un tour, jamais les sorties d outils.
-  # -o ecrit hors du fil ; publication atomique une fois le processus termine.
+  # Only the final response becomes a turn, never tool output.
+  # -o writes outside the thread; publish atomically after the process ends.
   if [ $code -eq 0 ] && [ -s "$brouillon" ]; then
     { echo "---"; echo "n: $n"; echo "de: codex"; echo "a: claude";
       echo "type: reponse"; echo "utc: $(utc)"; echo "---"; echo
@@ -392,25 +390,25 @@ cmd_envoyer() {
   fi
   rm -f "$brouillon" "$sortie.partiel"
 
-  # On ne cherche une cause d echec QUE si le run a echoue. La version
-  # precedente fouillait le log dans tous les cas, et Codex, en lisant duo.sh
-  # pendant son exploration, avait recopie dans sa sortie la ligne source qui
-  # contient la phrase d erreur. Le script a donc conclu a un echec, supprime
-  # une reponse valide, et personne n aurait compris pourquoi.
-  # Les motifs sont ancres en debut de ligne pour la meme raison.
+  # Search for a failure cause ONLY when the run failed. The previous
+  # version always searched the log. While exploring duo.sh, Codex copied
+  # a source line containing the error phrase into its output.
+  # The script then inferred failure and deleted a valid response,
+  # leaving no understandable explanation.
+  # Patterns are anchored at the start of a line for the same reason.
   if [ $code -ne 0 ] || [ ! -s "$sortie" ]; then
-    rm -f "$sortie"     # -o cree parfois un fichier vide : pas de tour muet
+    rm -f "$sortie"     # -o sometimes creates an empty file: no silent turns
     if grep -qE '^Not inside a trusted directory' "$log" 2>/dev/null; then
-      echo "codex refuse ce dossier : il n est pas un depot git de confiance." >&2
-      echo "  Ouvrir la mission dans un depot git (git init suffit), ou lancer" >&2
-      echo "  codex une fois a la main dans ce dossier pour l approuver." >&2
+      echo "codex rejected this directory: it is not a trusted git repository." >&2
+      echo "  Open the mission in a git repository (git init is enough), or run" >&2
+      echo "  codex manually once in this directory to approve it." >&2
     elif grep -qE "You.?ve hit your usage limit|^Error: usage limit" "$log" 2>/dev/null; then
-      echo "codex a atteint son quota. Reprendre plus tard, le message est archive." >&2
+      echo "codex has reached its quota. Resume later; the message is archived." >&2
     else
-      echo "codex n a pas repondu (code $code). Log : $log" >&2
+      echo "codex did not respond (code $code). Log: $log" >&2
     fi
-    echo "Le message reste archive dans $envoye. Le canal est asynchrone :" >&2
-    echo "continue seul sur ce qui ne depend pas de lui, ne boucle pas." >&2
+    echo "The message remains archived in $envoye. The channel is asynchronous:" >&2
+    echo "continue alone on independent work; do not retry in a loop." >&2
     return 3
   fi
 
@@ -418,92 +416,91 @@ cmd_envoyer() {
   echo "$sortie"
 }
 
-# --- bonjour : la poignee de main d ouverture ------------------------------
-# Ce n est pas de la politesse. Sans elle, chacun suppose ce que l autre sait
-# faire, et on a deja perdu une demi-journee sur une supposition fausse. Le
-# bonjour porte une carte d identite : qui je suis, ce que j ai, ce que je n ai
-# pas, et ce que je commence tout de suite.
+# --- bonjour: the opening handshake --------------------------------------
+# This is not politeness. Without it, each agent assumes the other's tools;
+# a false assumption has already cost half a day. The greeting carries
+# an identity card: who I am, what I have, what I lack, and what I start now.
 cmd_bonjour() {
   local qui="${1:-claude}" mission="${2:-}"
-  case "$qui" in claude|codex) ;; *) echo "duo: auteur invalide" >&2; return 1 ;; esac
+  case "$qui" in claude|codex) ;; *) echo "duo: invalid author" >&2; return 1 ;; esac
   mkdir -p "$ECHANGES" "$CLAIMS" || return 1
-  # La carte n est PLUS ecrite en dur. Elle l etait, et elle annoncait un REPL
-  # persistant que Codex n avait pas, en niant des connecteurs et des taches de
-  # fond qu il avait. Codex a demontre les deux. Un script ne peut pas savoir
-  # quels outils sont exposes dans la session d en face : c est l agent qui
-  # regarde et qui declare. Le 3e argument porte cette carte.
+  # The card is NO LONGER hardcoded. It used to advertise a persistent REPL
+  # Codex lacked, while denying connectors and background tasks it had.
+  # Codex demonstrated both errors. A script cannot know which tools
+  # the other session exposes: the agent must inspect and declare them.
+  # The third argument carries that card.
   local carte="${3:-}"
   if [ -z "$carte" ]; then
-    carte="- **Je suis $([ "$qui" = codex ] && echo 'Codex CLI' || echo 'Claude Code')**, dans \`$(basename "$RACINE")\`.
-- **Les outils que je vois VRAIMENT dans cette session :** (a remplir en
-  regardant mes outils, jamais en recopiant un tableau)
-- **Ce que je ne vois pas ici :** (a remplir)
-- **Ma contrainte d orchestration :** (a remplir)"
-    echo "duo: carte non fournie. Le modele est dans le tour, a completer." >&2
-    echo "     Usage : duo.sh bonjour $qui \"<mission>\" \"<ta carte>\"" >&2
+    carte="- **I am $([ "$qui" = codex ] && echo 'Codex CLI' || echo 'Claude Code')**, in \`$(basename "$RACINE")\`.
+- **The tools I ACTUALLY see in this session:** (fill in by inspecting
+  my tools, never by copying a table)
+- **What I do not see here:** (fill in)
+- **My orchestration constraint:** (fill in)"
+    echo "duo: no capability card supplied. Complete the template in the turn." >&2
+    echo "     Usage: duo.sh bonjour $qui \"<mission>\" \"<ta carte>\"" >&2
   fi
   DE="$qui"; [ "$qui" = "codex" ] && A="claude" || A="codex"
   TYPE="bonjour"; FICHIERS=""; REPLY=""
 
-  # Le deuxieme bonjour n ouvre pas le canal, il y repond. On le dit, et on
-  # pointe le tour auquel il repond : le fil doit se lire sans deviner.
+  # The second greeting answers the first rather than opening the channel.
+  # Say so and link to that turn: the thread must not require guesswork.
   local premier ouverture
   premier=$(ls -1 "$ECHANGES" 2>/dev/null | grep -- '-bonjour\.md$' | head -1)
   if [ -n "$premier" ]; then
     REPLY="${premier%%-*}"
-    ATTENDU="qu on choisisse le pilote et qu on demarre"
-    ouverture="Bonjour. Je reponds au tien."
+    ATTENDU="choose the lead and start"
+    ouverture="Hello. I am replying to your greeting."
   else
-    ATTENDU="ton bonjour, avec ta propre carte"
-    ouverture="Bonjour. J ouvre le canal."
+    ATTENDU="your greeting with your own capability card"
+    ouverture="Hello. I am opening the channel."
   fi
 
   ecrire_tour "$ouverture
 
 $carte
 
-**La mission telle que je la comprends :** ${mission:-(a completer)}
+**The mission as I understand it:** ${mission:-(fill in)}
 
-**Le pilote que je propose, et pourquoi :** (a completer)
+**My proposed lead, and why:** (fill in)
 
-**Ce que je commence tout de suite, ne le refais pas :** (a completer)
+**What I am starting now; do not repeat it:** (fill in)
 
-**Avant de commencer :** corrige ma carte si elle est fausse. Tant qu on ne
-s est pas presentes tous les deux, chacun suppose ce que l autre sait faire, et
-une supposition fausse coute une demi-journee."
+**Before starting:** correct my card if it is wrong. Until both of us have
+introduced ourselves, each assumes what the other can do, and a false
+assumption costs half a day."
 }
 
-# --- pousser : envoyer un tour DEJA ecrit ----------------------------------
-# duo.sh bonjour ecrit un tour. L envoyer avec "envoyer" en creerait un second,
-# identique. pousser prend le dernier tour ecrit et le transmet tel quel.
+# --- pousser: send an ALREADY written turn -------------------------------
+# duo.sh bonjour writes a turn. Sending it with envoyer would create an
+# identical second turn. pousser transmits the last written turn as-is.
 cmd_pousser() {
-  # On pousse SON dernier tour, pas "tout sauf ceux de codex" : code en dur,
-  # Codex poussait le message de Claude a sa place.
+  # Push MY last turn, not "everything except codex turns": with that
+  # hardcoded rule, Codex used to push Claude's message instead.
   local moi dernier
   moi="${DUO_QUI:-claude}"
   [ "$moi" = "claude" ] || {
-    echo "duo: pousser appelle Codex ; Codex doit repondre avec ecrire." >&2; return 1; }
+    echo "duo: pousser invokes Codex; Codex must reply with ecrire." >&2; return 1; }
   dernier=$(ls -1 "$ECHANGES"/*.md 2>/dev/null | grep -- "-$moi-" | tail -1)
-  [ -z "$dernier" ] && { echo "aucun tour a pousser" >&2; return 1; }
-  # On retire l en-tete : l autre agent lit le corps, pas nos metadonnees.
-  # C etait fait par deux `sed 1,/^---$/d` a la suite, et ca vidait le fichier :
-  # la premiere supprimait deja tout l en-tete (la ligne 1 EST un ---, donc la
-  # plage court jusqu au --- de fermeture), la seconde supprimait le corps
-  # jusqu a la fin faute de troisieme ---. pousser n a donc jamais rien envoye.
-  # Meme extraction que afficher_tour : on compte les delimiteurs.
+  [ -z "$dernier" ] && { echo "no turn to send with pousser" >&2; return 1; }
+  # Strip the header: the other agent reads the body, not our metadata.
+  # Two consecutive `sed 1,/^---$/d` calls used to empty the file:
+  # the first already removed the entire header (line 1 IS ---, so the
+  # range ends at the closing ---); without a third ---, the second removed
+  # the rest of the body. pousser therefore never sent anything.
+  # Use the same extraction as afficher_tour: count delimiters.
   local corps; corps=$(awk 'BEGIN{d=0} {sub(/\r$/,"")} d<2 && /^---$/{d++; next} d>=2' "$dernier")
-  [ -z "$corps" ] && { echo "duo: le tour $dernier n a pas de corps." >&2; return 1; }
+  [ -z "$corps" ] && { echo "duo: turn $dernier has no body." >&2; return 1; }
   cmd_envoyer --sans-tour "$corps"
 }
 
 
-# --- suivre : le fil dans le terminal, qui se met a jour tout seul --------
-# Pas une page web. Un terminal qu on laisse ouvert a cote, qui affiche chaque
-# nouveau tour des qu il arrive. La commande ne rend la main qu au Ctrl-C.
-# Couleurs. Ecrites en \033 et non en caractere ESC brut : un ESC dans le
-# fichier survit mal a une edition, a un copier-coller ou a un diff.
-# Desactivables : NO_COLOR=1, la convention usuelle, et automatiquement
-# quand la sortie n est pas un terminal (redirection vers un fichier).
+# --- suivre: a terminal thread that updates automatically ----------------
+# Keep a separate terminal open to display each turn as it arrives.
+# The command returns control only on Ctrl-C.
+# Colors use \033, not literal ESC characters: raw ESC characters
+# do not survive editing, copy/paste, or diffs reliably.
+# Disable with the usual NO_COLOR=1 convention; also disabled automatically
+# when output is not a terminal (for example, file redirection).
 if [ -n "${NO_COLOR:-}" ] || [ ! -t 1 ]; then
   COUL_CLAUDE=""; COUL_CODEX=""; GRIS=""; VIF=""; RAZ=""
 else
@@ -511,8 +508,8 @@ else
   GRIS=$'\033[38;5;244m'; VIF=$'\033[1m'; RAZ=$'\033[0m'
 fi
 
-# Un tour, mis en forme. Utilise par journal et par suivre : une seule
-# presentation, sinon les deux divergent.
+# Format a turn. Shared by journal and suivre to keep their presentation
+# identical rather than allowing the two to diverge.
 afficher_tour() {
   local f="$1" nom base coul qui ligne dans_entete=1
   "$PY" "$SCRIPTS/message_guard.py" file "$f" || return 4
@@ -524,11 +521,10 @@ afficher_tour() {
   utc=$(sed -n 's/^utc: //p' "$f" | head -1)
   printf '%s%s  %s %s%s  %s%s%s
 ' "$coul" "$VIF" "$n" "$qui" "$RAZ" "$GRIS" "$type ${utc#*T}" "$RAZ"
-  # Le corps commence apres le second ---. Mais un fichier ecrit par un outil
-  # tiers peut ne pas avoir d en-tete du tout : on affiche alors le fichier
-  # entier plutot qu un tour vide. Un message affiche a moitie est pire qu un
-  # message brut.
-  # barre ASCII : l UTF-8 sortait en mojibake selon la console Windows
+  # The body starts after the second ---. A file written by another tool
+  # may have no header: display the entire file instead of an empty turn.
+  # Displaying half a message is worse than displaying it raw.
+  # ASCII bar: UTF-8 produced mojibake in some Windows consoles.
   local corps
   if head -1 "$f" | tr -d '\r' | grep -q '^---$' && [ "$(tr -d '\r' < "$f" | grep -c '^---$')" -ge 2 ]; then
     corps=$(awk 'BEGIN{d=0} {sub(/\r$/,"")} d<2 && /^---$/{d++; next} d>=2 && (NF || vu) {vu=1; print}' "$f")
@@ -544,10 +540,10 @@ cmd_suivre() {
   local vus="" f base
   printf '%s%s%s
 ' "$VIF" "$(etat_lire mission)" "$RAZ"
-  printf '%sfil en direct. Ctrl-C pour sortir.%s
+  printf '%slive thread. Ctrl-C to exit.%s
 
 ' "$GRIS" "$RAZ"
-  # on affiche d abord ce qui existe deja, puis on attend la suite
+  # Display existing turns first, then wait for new ones.
   while :; do
     for f in "$ECHANGES"/*.md; do
       [ -e "$f" ] || continue
@@ -560,20 +556,20 @@ cmd_suivre() {
   done
 }
 
-# --- claims : dire ce qu on prend AVANT de le prendre ----------------------
-# L identite n a pas de valeur par defaut sur les commandes qui ECRASENT ou
-# SUPPRIMENT. Sans ce garde-fou, Codex lancant `duo.sh claim` sans DUO_QUI
-# ecrivait dans claude.md, et `duo.sh libere` supprimait la reservation de
-# Claude. Constate en test, pas suppose.
+# --- claims: declare what you take BEFORE taking it -----------------------
+# Identity has no default for commands that OVERWRITE or DELETE.
+# Without this guard, Codex running duo.sh claim without DUO_QUI wrote
+# into claude.md, and duo.sh libere deleted Claude's reservation.
+# Observed in testing, not assumed.
 qui_suis_je() {
   if [ -z "${DUO_QUI:-}" ]; then
-    echo "duo: pose DUO_QUI=claude ou DUO_QUI=codex avant claim/libere." >&2
-    echo "     Sans ca, on ecrase la reservation de l autre." >&2
+    echo "duo: set DUO_QUI=claude or DUO_QUI=codex before claim/libere." >&2
+    echo "     Without it, the other agent's reservation would be overwritten." >&2
     return 1
   fi
   case "$DUO_QUI" in
     claude|codex) printf '%s' "$DUO_QUI" ;;
-    *) echo "duo: DUO_QUI vaut claude ou codex, pas '$DUO_QUI'." >&2; return 1 ;;
+    *) echo "duo: DUO_QUI must be claude or codex, not '$DUO_QUI'." >&2; return 1 ;;
   esac
 }
 
@@ -582,11 +578,11 @@ cmd_claim() {
   qui=$(qui_suis_je) || return 1
   [ -z "$fichiers" ] && { echo "usage: duo.sh claim \"a.js b.md\" \"objectif\" [minutes]" >&2; return 1; }
   verifier_texte "$fichiers" "$but" || return 4
-  [[ "$min" =~ ^[1-9][0-9]*$ ]] || { echo "duo: duree invalide" >&2; return 1; }
+  [[ "$min" =~ ^[1-9][0-9]*$ ]] || { echo "duo: invalid duration" >&2; return 1; }
   mkdir -p "$CLAIMS" || return 1
   local f="$CLAIMS/$qui.md" tmp="$CLAIMS/$qui.$$-${RANDOM:-0}.partiel"
   {
-    echo "# Reserve par $qui"
+    echo "# Reserved by $qui"
     echo "- pose le : $(utc)"
     echo "- expire dans : $min min"
     echo "- objectif : $but"
@@ -597,11 +593,11 @@ cmd_claim() {
   echo "$f"
 }
 
-# Le claim annonce "expire dans 45 min" depuis le debut, et RIEN ne l appliquait
-# ni ne le signalait. Un agent qui rendait la main sans liberer bloquait donc un
-# fichier pour toujours, c est-a-dire exactement ce que l expiration devait
-# empecher. On calcule l age et on le dit.
-claim_perime() {                       # 0 = perime
+# Claims always advertised "expires in 45 minutes", but NOTHING enforced
+# or reported expiration. An agent returning without releasing a claim
+# blocked a file forever, exactly what expiration was meant to prevent.
+# Calculate the age and report it.
+claim_perime() {                       # 0 = expired
   "$PY" - "$1" <<'PYEOF'
 import sys, re, datetime
 try:
@@ -612,7 +608,7 @@ try:
     age = (datetime.datetime.utcnow() - t0).total_seconds() / 60
     sys.exit(0 if age > mins else 1)
 except Exception:
-    sys.exit(1)                        # illisible : on ne perime pas au hasard
+    sys.exit(1)                        # unreadable: do not assume expiration
 PYEOF
 }
 
@@ -622,53 +618,52 @@ cmd_claims() {
     [ -e "$f" ] || continue
     cat "$f"
     if claim_perime "$f"; then
-      printf '%s  ^ EXPIRE. Le fichier est libre : ecrire a son auteur avant
+      printf '%s  ^ EXPIRED. The file is available: contact its author before
 ' "$GRIS"
-      printf '    de le prendre, il tourne peut-etre encore.%s
+      printf '    taking it; the author may still be running.%s
 ' "$RAZ"
     fi
     echo; n=$((n+1))
   done
-  [ $n -eq 0 ] && echo "(rien de reserve)"
+  [ $n -eq 0 ] && echo "(nothing reserved)"
   return 0
 }
 
-# --- reprendre : le briefing complet en un appel --------------------------
-# Un agent qui arrive dans un depot ou .duo/ existe deja ne doit pas avoir a
-# fouiller. Une commande, et il sait la mission, qui pilote, ce qui est reserve,
-# et les trois derniers tours. C est la commande a lancer EN PREMIER quand on
-# reprend une mission commencee.
+# --- reprendre: the full briefing in one call -----------------------------
+# An agent joining a repository with an existing .duo/ should not have to
+# dig around. One command shows the mission, lead, reservations, and last
+# three turns. Run this FIRST when resuming an ongoing mission.
 cmd_reprendre() {
-  [ -f "$MISSION" ] || { echo "aucune mission ici. Lance : duo.sh init \"<mission>\"" >&2; return 1; }
-  echo "════ LA MISSION ═══════════════════════════════════════════"
+  [ -f "$MISSION" ] || { echo "no mission here. Run: duo.sh init \"<mission>\"" >&2; return 1; }
+  echo "════ THE MISSION ═══════════════════════════════════════════"
   cat "$MISSION"
   echo
-  echo "════ RESERVE ══════════════════════════════════════════════"
+  echo "════ RESERVED ══════════════════════════════════════════════"
   cmd_claims
   echo
-  echo "════ LES 3 DERNIERS TOURS ═════════════════════════════════"
+  echo "════ LAST 3 TURNS ═════════════════════════════════"
   cmd_journal 3
   echo
-  echo "════ ET MAINTENANT ════════════════════════════════════════"
-  echo "1. Verifier ce que l autre a livre AVANT de l integrer."
-  echo "2. Poser un claim avant de modifier quoi que ce soit."
-  echo "3. Repondre au dernier tour, en disant ce qu on fait pendant ce temps."
+  echo "════ NEXT STEPS ════════════════════════════════════════"
+  echo "1. Check the other agent's deliverable BEFORE integrating it."
+  echo "2. Create a claim before changing anything."
+  echo "3. Reply to the last turn, stating what you are doing meanwhile."
 }
 
-# --- liberer : un claim qu on ne libere pas est un fichier mort ------------
+# --- libere: an unreleased claim leaves a file blocked --------------------
 cmd_libere() {
   local qui
   qui=$(qui_suis_je) || return 1
   if [ -f "$CLAIMS/$qui.md" ]; then
-    rm -f "$CLAIMS/$qui.md"; echo "$qui a libere ses fichiers"
+    rm -f "$CLAIMS/$qui.md"; echo "$qui released its files"
   else
-    echo "$qui n avait rien de reserve"
+    echo "$qui had no reservations"
   fi
 }
 
 cmd_journal() {
   local n="${1:-5}" f
-  [[ "$n" =~ ^[1-9][0-9]*$ ]] || { echo "duo: nombre de tours invalide" >&2; return 1; }
+  [[ "$n" =~ ^[1-9][0-9]*$ ]] || { echo "duo: invalid turn count" >&2; return 1; }
   [ -d "$ECHANGES" ] || return 0
   local fichiers=("$ECHANGES"/*.md)
   [ -e "${fichiers[0]}" ] || return 0
@@ -681,9 +676,9 @@ cmd_fil() {
   local html="$DUO/fil.html"
   local SUIVI="${SUIVI:-0}"
   {
-    echo '<!doctype html><meta charset="utf-8"><title>Fil Claude / Codex</title>'
-    # La page se recharge seule. Inoffensif quand on la consulte a froid :
-    # elle se recontente d afficher le meme contenu.
+    echo '<!doctype html><meta charset="utf-8"><title>Claude / Codex thread</title>'
+    # The page reloads automatically. Harmless for a static snapshot:
+    # it simply displays the same content again.
     [ "$SUIVI" = "1" ] && echo '<meta http-equiv="refresh" content="2">'
     echo '<style>body{background:#0f1117;color:#e8e8e8;font:15px/1.65 ui-sans-serif,system-ui;max-width:920px;margin:0 auto;padding:40px 20px}'
     echo 'article{border-left:3px solid;padding:2px 0 2px 16px;margin:26px 0;white-space:pre-wrap}'
@@ -693,8 +688,8 @@ cmd_fil() {
     echo 'header b{font-weight:600}header span{font-size:12px;opacity:.55}'
     echo '.vide{opacity:.5;font-style:italic;margin-top:40px}</style>'
     echo "<header><b>$(etat_lire mission | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')</b><span>"
-    if [ "$SUIVI" = "1" ]; then echo "en direct, recharge toutes les 2 s &middot; $(utc)"
-    else echo "instantane du $(utc) &middot; duo.sh suivre pour le direct"; fi
+    if [ "$SUIVI" = "1" ]; then echo "live, reloads every 2 s &middot; $(utc)"
+    else echo "snapshot at $(utc) &middot; duo.sh suivre for live updates"; fi
     echo '</span></header>'
     for f in "$ECHANGES"/*.md; do
       [ -e "$f" ] || continue
@@ -703,20 +698,20 @@ cmd_fil() {
       sed 's/&/\&amp;/g; s/</\&lt;/g' "$f"
       echo '</article>'
     done
-    [ -z "$(ls -1 "$ECHANGES" 2>/dev/null)" ] && echo '<p class="vide">Personne n a encore parle.</p>'
+    [ -z "$(ls -1 "$ECHANGES" 2>/dev/null)" ] && echo '<p class="vide">Nobody has spoken yet.</p>'
   } > "$DUO/fil.partiel"
   mv -f "$DUO/fil.partiel" "$html" || return 1
   echo "$html"
 }
 
 cmd_etat() {
-  [ -f "$MISSION" ] || { echo "pas de mission. Lance : duo.sh init \"<mission>\""; return 1; }
+  [ -f "$MISSION" ] || { echo "no mission. Run: duo.sh init \"<mission>\""; return 1; }
   sed -n '1,/^## Desaccords/p' "$MISSION"
-  echo "── etat"
+  echo "── state"
   [ -f "$ETAT" ] && { cat "$ETAT"; echo; }
-  echo "── derniers tours"
+  echo "── latest turns"
   ls -1 "$ECHANGES" 2>/dev/null | tail -6
-  echo "── reserve"
+  echo "── reserved"
   cmd_claims
 }
 

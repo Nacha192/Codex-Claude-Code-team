@@ -14,6 +14,8 @@ if not BASH and os.name == 'nt':
     git = Path(shutil.which('git')).resolve()
     BASH = str(git.parent.parent / 'bin/bash.exe')
 
+# French payloads and expected strings below are compatibility fixtures.
+# Keep them unchanged, including the French disclosure-detection coverage.
 STUB = '''#!/usr/bin/env bash
 if [ -n "${FAKE_TRACE:-}" ]; then printf '%s\\n' "$@" > "$FAKE_TRACE.args"; fi
 incoming=$(cat)
@@ -222,7 +224,7 @@ class BridgeTests(unittest.TestCase):
                 raise
             result = subprocess.run(['cmd', '/c', 'mklink', '/J', str(self.path / '.duo'), str(target)], capture_output=True)
             if result.returncode:
-                self.skipTest('Creation de liens non autorisee sur cet hote')
+                self.skipTest('Link creation is not permitted on this host')
         self.run_duo('init', 'mission', code=4)
         self.assertFalse(list(target.iterdir()))
 

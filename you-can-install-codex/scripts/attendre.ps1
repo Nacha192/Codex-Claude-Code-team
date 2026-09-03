@@ -1,16 +1,16 @@
 <#
-  attendre.ps1 - surveiller sans bloquer betement.
+  attendre.ps1 - watch for changes without pointless blocking.
 
-  Sert a celui des deux agents qui n a pas de taches en arriere-plan. Au lieu
-  de dormir en boucle, on surveille le disque et on rend la main des que
-  quelque chose bouge, ou au bout du delai.
+  For whichever agent lacks background tasks. Instead of repeatedly sleeping,
+  watch the disk and return control as soon as something changes or the
+  timeout expires.
 
     .\attendre.ps1 -Chemin .duo\pour-claude -Delai 600
     .\attendre.ps1 -Chemin .duo\echanges -Motif "*-codex-*.md" -Delai 900
 
-  Code de sortie : 0 quelque chose est arrive, 1 delai depasse, 2 chemin absent.
-  Sur la sortie standard : le chemin du fichier apparu, rien d autre, pour que
-  l appelant puisse l enchainer directement.
+  Exit codes: 0 something arrived, 1 timeout, 2 missing path.
+  Standard output contains only the new file's path, so the caller can
+  pass it directly to the next step.
 #>
 param(
   [Parameter(Mandatory=$true)][string]$Chemin,
@@ -19,9 +19,9 @@ param(
   [ValidateRange(1, 60)][int]$Pas = 3
 )
 
-if (-not (Test-Path -LiteralPath $Chemin -PathType Container)) { Write-Error 'chemin absent'; exit 2 }
+if (-not (Test-Path -LiteralPath $Chemin -PathType Container)) { Write-Error 'path not found'; exit 2 }
 
-# On photographie l existant : on ne veut etre reveille que par du NOUVEAU.
+# Snapshot existing files: only NEW activity should wake us.
 $connus = @{}
 Get-ChildItem -LiteralPath $Chemin -Filter $Motif -File -ErrorAction SilentlyContinue |
   ForEach-Object { $connus[$_.FullName] = $_.LastWriteTimeUtc }
@@ -31,8 +31,8 @@ while ($chrono.Elapsed.TotalSeconds -lt $Delai) {
   $nouveaux = Get-ChildItem -LiteralPath $Chemin -Filter $Motif -File -ErrorAction SilentlyContinue |
     Where-Object { -not $connus.ContainsKey($_.FullName) -or $connus[$_.FullName] -ne $_.LastWriteTimeUtc }
   if ($nouveaux) {
-    # Un fichier peut etre en cours d ecriture : on laisse la taille se stabiliser
-    # avant de rendre la main, sinon on lit la moitie d une reponse.
+    # A file may still be being written: wait for its size to stabilize
+    # before returning, so we do not read half a response.
     $cible = $nouveaux | Sort-Object LastWriteTimeUtc | Select-Object -Last 1
     while ($chrono.Elapsed.TotalSeconds -lt $Delai) {
       $taille = $cible.Length
@@ -53,5 +53,5 @@ while ($chrono.Elapsed.TotalSeconds -lt $Delai) {
     Start-Sleep -Milliseconds ([int][Math]::Max(1, [Math]::Min($Pas * 1000, $reste)))
   }
 }
-Write-Error "rien de nouveau dans $Chemin apres $Delai s"
+Write-Error "nothing new in $Chemin after $Delai s"
 exit 1

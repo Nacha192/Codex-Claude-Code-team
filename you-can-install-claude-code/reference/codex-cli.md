@@ -1,217 +1,210 @@
-# Le CLI de Codex, ce qui a ete verifie
+# The Codex CLI: verified findings
 
-Verifie sur cette machine, Windows 11, `codex-cli 0.152.0`. Ce qui n a pas ete
-verifie est marque comme tel. Une fiche n est pas une source : si un point vous
-sert a decider, revalidez-le.
+Verified on this machine, Windows 11, `codex-cli 0.152.0`. Unverified points
+are marked as such. A reference note is not a source: if a point informs your
+decision, verify it again.
 
 ---
 
-## Ou est le binaire
+## Where the binary is
 
-**Il peut etre dans le PATH.** Une installation npm y depose un shim `codex`.
-Verifie le 2026-09-02 sur cette machine : `command -v codex` resolvait
-`.../scoop/apps/nodejs/current/bin/codex`. La fiche affirmait l inverse, c etait
-faux, et c est Codex qui l a releve.
+**It can be on PATH.** An npm installation puts a `codex` shim there.
+Verified on 2026-09-02 on this machine: `command -v codex` resolved to
+`.../scoop/apps/nodejs/current/bin/codex`. This note said the opposite.
+That was wrong, and Codex caught it.
 
-Ordre de recherche, du plus fiable au plus fragile :
+Search order, from most to least reliable:
 
-1. la variable `CODEX_BIN`, si elle est posee ;
-2. `command -v codex` ;
-3. la cle `CODEX_CLI_PATH` dans `~/.codex/config.toml` ;
+1. The `CODEX_BIN` variable, if set.
+2. `command -v codex`.
+3. The `CODEX_CLI_PATH` key in `~/.codex/config.toml`.
 4. `~/AppData/Local/OpenAI/Codex/bin/<hash>/codex.exe`.
 
-Le hash change a chaque mise a jour et **plusieurs versions coexistent** : le
-glob peut donc tomber sur une ancienne. Il est en dernier pour cette raison.
-**Ne jamais coder un chemin en dur.** `duo.sh` fait cette recherche.
+The hash changes with each update, and **multiple versions coexist**, so the
+glob can select an older one. That is why it comes last.
+**Never hardcode a path.** `duo.sh` performs this search.
 
 ---
 
-## Les commandes utiles
+## Useful commands
 
 ```bash
 codex exec -C <dossier> -s <sandbox> -o <fichier> "<prompt>"
 codex exec resume --last -o <fichier> "<prompt>"
 ```
 
-- `-C` fixe le repertoire de travail.
-- `-s workspace-write` autorise l ecriture dans le dossier de travail.
-- `-o` ecrit la reponse dans un fichier. **A utiliser systematiquement** : la
-  sortie standard est bruitee, le fichier ne l est pas.
+- `-C` sets the working directory.
+- `-s workspace-write` permits writing in the working directory.
+- `-o` writes the response to a file. **Use it every time**: standard output
+  is noisy; the file is not.
 
-**Piege confirme, avec une correction.** `codex exec resume --help` ne declare
-ni `-C` ni `-s` : les passer echoue. Il faut faire un `cd` avant. En revanche,
-**ce que `resume` herite exactement du sandbox d origine n est documente nulle
-part** : la version precedente de cette fiche l affirmait, sans preuve. Si le
-sandbox compte pour ce que vous faites, verifiez-le, ne le supposez pas.
+**Confirmed pitfall, with a correction.** `codex exec resume --help` declares
+neither `-C` nor `-s`; passing them fails. Use `cd` first. However,
+**exactly what `resume` inherits from the original sandbox is not documented
+anywhere**: the previous version of this note asserted it without evidence.
+If sandbox behavior matters for your work, verify it rather than assuming.
 
 ---
 
-## Ou vivent ses instructions
+## Where its instructions live
 
-Trois couches distinctes, confirmees par Codex lui-meme avec les liens de sa
-documentation.
+Three distinct layers, confirmed by Codex itself with documentation links.
 
-**`AGENTS.md` : toujours charge.** La chaine est construite une fois au
-demarrage du run : `~/.codex/AGENTS.override.md` sinon `~/.codex/AGENTS.md`,
-puis, de la racine git jusqu au repertoire courant, un fichier par repertoire.
-Les fichiers sont **concatenes**, et les plus proches du repertoire courant ont
-priorite en cas de conflit. Un `AGENTS.override.md` remplace l `AGENTS.md` du
-meme niveau. Limite combinee par defaut : 32 Kio.
+**`AGENTS.md`: always loaded.** The chain is built once when the run starts:
+`~/.codex/AGENTS.override.md`, or otherwise `~/.codex/AGENTS.md`, then one file
+per directory from the Git root to the current directory. Files are
+**concatenated**; those closer to the current directory take precedence on
+conflicts. An `AGENTS.override.md` replaces `AGENTS.md` at the same level.
+Default combined limit: 32 KiB.
 
-**Skills : charges a la demande, exactement comme chez Claude.** Nom et
-description visibles au depart, `SKILL.md` charge integralement seulement quand
-la tache correspond ou quand il est invoque. Emplacements :
+**Skills: loaded on demand, just like Claude's.** Name and description are
+visible initially; the full `SKILL.md` loads only when the task matches or
+the skill is invoked. Locations:
 
-- depot : `.agents/skills/<nom>/SKILL.md`
-- utilisateur : `~/.codex/skills/<nom>/SKILL.md`
+- Repository: `.agents/skills/<nom>/SKILL.md`.
+- User: `~/.codex/skills/<nom>/SKILL.md`.
 
-**`openai.yaml` va dans `<skill>/agents/openai.yaml`, pas a la racine du
-skill.** Verifie sur les skills livres par OpenAI, tous le placent la. Sa forme :
+**`openai.yaml` belongs in `<skill>/agents/openai.yaml`, not the skill root.**
+Verified against OpenAI's bundled skills, which all put it there. Format:
 
 ```yaml
 interface:
-  display_name: "Nom lisible"
-  short_description: "Une phrase."
+  display_name: "Readable name"
+  short_description: "One sentence."
 policy:
   allow_implicit_invocation: false
 ```
 
-`allow_implicit_invocation: false` **interdit a Codex d invoquer le skill de sa
-propre initiative**. Ce n est pas un interrupteur qui empecherait un chargement
-autrement inevitable, c est une autorisation qu on retire.
+`allow_implicit_invocation: false` **forbids Codex from invoking the skill on
+its own initiative**. This removes permission; it is not a switch preventing
+an otherwise inevitable load.
 
-C est **l erreur de conception la plus couteuse a eviter** : croire que Codex n a
-que des instructions permanentes. Il a la meme divulgation progressive que nous.
-Le protocole complet va donc dans un skill, **pas** dans `AGENTS.md`, sinon il
-serait charge pour toutes les taches.
+**The most costly design mistake to avoid** is believing Codex only has
+permanent instructions. It has the same progressive disclosure as we do.
+The full protocol belongs in a skill, **not** `AGENTS.md`, or it would load
+for every task.
 
-**`config.toml` : comportement et capacites.** Modele, sandbox, approbations,
-MCP, notifications. Ce n est pas l endroit d un protocole metier.
+**`config.toml`: behavior and capabilities.** Model, sandbox, approvals,
+MCP, notifications. This is not the place for a business protocol.
 
-**Custom prompts.** Ils apparaissent en `/prompts:<nom>`. Ce sont des commandes
-lancees explicitement, pas des instructions injectees. Sur cette machine le
-dossier `~/.codex/prompts/` **n existe pas** : un `ls` sans sortie veut dire
-absent, pas vide.
+**Custom prompts.** They appear as `/prompts:<nom>`. These are explicitly run
+commands, not injected instructions. On this machine, `~/.codex/prompts/`
+**does not exist**: a `ls` with no output means absent, not empty.
 
 ---
 
-## Le reveiller depuis l exterieur
+## Waking it externally
 
 ```bash
-codex exec "message"                       # nouveau run
-codex exec resume --last "message"         # reprend la derniere conversation
-codex exec resume <SESSION_ID> "message"   # reprise deterministe
+codex exec "message"                       # new run
+codex exec resume --last "message"         # resume the latest conversation
+codex exec resume <SESSION_ID> "message"   # deterministic resumption
 ```
 
-**`--last` est fragile** des que plusieurs runs avancent en parallele. Le
-protocole stocke un session id explicite. Il est imprime dans l en-tete du run,
-ligne `session id:`, et `duo.sh` l extrait de la sortie.
+**`--last` is fragile** when multiple runs progress in parallel. The protocol
+stores an explicit session ID. It is printed in the run header on the
+`session id:` line, and `duo.sh` extracts it from the output.
 
-**`notify` est SORTANT.** Codex appelle une commande avec un payload JSON quand
-un evenement survient. Ce n est pas une boite aux lettres entrante.
+**`notify` is OUTGOING.** Codex calls a command with a JSON payload when an
+event occurs. It is not an incoming mailbox.
 
-**Il n existe pas de moyen propre d injecter un message dans un `codex exec` en
-cours.** Chaque echange est une nouvelle invocation de processus qui peut
-reprendre la meme session. Un agent toujours vivant demanderait le Codex App
-Server ou le SDK, une architecture plus lourde.
+**There is no clean way to inject a message into a running `codex exec`.**
+Each exchange is a new process invocation that can resume the same session.
+A continuously live agent would require the Codex App Server or SDK, a
+heavier architecture.
 
-**Attention a la portee de cette phrase.** C est une regle d orchestration du
-CLI, **pas une incapacite de Codex**. Codex leve la nuance lui-meme : selon la
-session, il sait conserver des processus, attendre leur sortie et utiliser des
-outils differes. Ce qui est vrai, c est qu un `codex exec` non interactif ne
-doit pas surveiller le canal indefiniment.
+**Be precise about that statement's scope.** It is a CLI orchestration rule,
+**not an inability of Codex**. Codex itself notes the distinction: depending
+on the session, it can keep processes alive, wait for their output, and use
+deferred tools. The actual rule is that a non-interactive `codex exec` should
+not watch the channel indefinitely.
 
-Consequence sur le protocole : **on ne demande pas a un `codex exec` d attendre.**
-Il finit, il publie, il rend la main, et l orchestrateur le relance.
-
----
-
-## Ses outils
-
-**Cette liste est indicative et datee. Elle ne fait pas foi.** Les outils
-exposes dependent de l hote, des plugins installes et de la politique de la
-session. Codex a constate lui-meme, le 2026-09-02, qu un outil que cette fiche
-donnait pour acquis (`node_repl`) n etait pas expose dans sa session.
-
-**La seule carte qui fait foi est celle que le run declare au bonjour.**
-Demandez-la, ne la deduisez pas d ici.
-
-Observe au moins une fois :
-
-- `image_gen` : generation d images. **C est la capacite qui justifie le duo**
-  la plupart du temps. Les images atterrissent dans `~/.codex/generated_images/`.
-- Pilotage de Chrome et d un navigateur interne, `computer-use`.
-- Des connecteurs, des sous-agents et des taches de fond, **selon la session**.
-  Ne pas ecrire qu il n en a pas.
+Protocol consequence: **do not ask a `codex exec` to wait.** It finishes,
+publishes, returns control, and the orchestrator relaunches it.
 
 ---
 
-## Ce qu il fait mieux, honnetement
+## Its tools
 
-Constate sur la refonte des creatives un projet de demonstration, pas suppose :
+**This list is indicative and dated, not authoritative.** Exposed tools depend
+on the host, installed plugins, and session policy. On 2026-09-02, Codex itself
+found that a tool this note took for granted (`node_repl`) was not exposed
+in its session.
 
-- **Il genere des images utilisables, et il sait pourquoi elles marchent.**
-  Interroge sur ce qu il ajoutait pour casser le rendu IA, il a repondu qu il ne
-  suffit pas d ajouter du desordre mais qu il faut montrer que les deux cotes de
-  la piece n ont pas servi de la meme facon. C est meilleur que la consigne qui
-  lui avait ete donnee.
-- **Il critique durement et souvent juste.** Sur quatre defauts qu il a releves,
-  trois ont ete corriges parce qu il avait raison.
-- **Il ne connait pas le contexte metier**, et c est une force pour la critique :
-  il voit ce qu on ne voit plus.
+**The only authoritative card is the one the run declares during the
+handshake.** Ask for it; do not infer it from this note.
 
-## Ce qu il fait moins bien
+Observed at least once:
 
-- Il n a pas l historique du projet. Une critique qui demande de refaire une
-  chose deja tranchee avec l utilisateur doit etre ecartee, pas suivie.
-- Il ne peut pas verifier une contrainte metier non ecrite. Si la contrainte
-  compte, elle doit etre dans le message ou dans un fichier qu il peut lire.
+- `image_gen`: image generation. **This is the capability that usually
+  justifies the duo.** Images land in `~/.codex/generated_images/`.
+- Chrome and internal browser control, `computer-use`.
+- Connectors, subagents, and background tasks, **depending on the session**.
+  Do not claim it has none.
 
 ---
 
-## Ses limites
+## What it does better, honestly
 
-Trois observees ici, quatre decrites par lui.
+Observed during an ad-creative redesign for a demo project, not assumed:
 
-- **Quota.** "You ve hit your usage limit... try again at HH:MM". Observe deux
-  fois. Panne temporaire : continuer seul, reprendre plus tard, ne pas boucler.
-- **Sortie vide.** Session morte, le fichier `-o` fait zero octet. `duo.sh`
-  traite ce cas comme un echec.
-- **Messages tres longs.** Il perd le milieu. Au-dela d une page, ecrire dans un
-  fichier du depot et lui donner le chemin.
-- **Timeout de session** : aucune duree universelle a encoder. Les limites
-  viennent de l hote, des outils et du processus appelant.
-- **Contexte** : depend du modele, et il compacte automatiquement les
-  conversations longues. **Ne pas inscrire une taille fixe dans le protocole.**
-- **Quota** : depend du compte et du modele, consultable avec `/status`, non
-  stable. Observe deux fois pendant la mise au point de ce skill.
-- **Sandbox et approbations** : imposes par la session, pas par une regle
-  generale. Ils sont imprimes dans l en-tete du run (`approval:`, `sandbox:`).
-  Observe ici : `workspace-write [workdir, /tmp, $TMPDIR]`, approbation `never`.
-- **Ecriture hors des racines autorisees** : impossible. **Une autorisation
-  ecrite dans le prompt ne rend pas un montage lecture seule inscriptible** :
-  constate pendant cette relecture, Codex avait la consigne de modifier
-  `.agents/skills/` et s est fait refuser l acces. Si l autre agent doit ecrire
-  quelque part, verifiez que la racine est ouverte, ne lui faites pas confiance
-  sur parole.
+- **It generates usable images and understands why they work.** Asked what it
+  added to break the AI look, it said adding clutter was not enough: the two
+  sides of a room should show different patterns of use. That was better than
+  the instruction it received.
+- **It critiques rigorously and is often right.** Three of four issues it
+  raised were fixed because it was right.
+- **It lacks the business context**, which helps critique: it sees what we
+  no longer notice.
+
+## What it does less well
+
+- It lacks the project's history. Reject a critique asking to redo something
+  already settled with the user rather than following it.
+- It cannot check unwritten business constraints. If a constraint matters,
+  put it in the message or a file it can read.
 
 ---
 
-## Etat de la relecture
+## Its limits
 
-**Relu par Codex le 2026-09-02**, sur `codex-cli 0.152.0`. Il a releve douze
-affirmations fausses ou trop absolues dans cette fiche. Toutes ont ete
-corrigees ci-dessus, apres verification de ce qui etait verifiable ici : le
-PATH, la sortie de `resume --help`, l en-tete du run, et l emplacement de
-`openai.yaml` dans les skills livres par OpenAI.
+Three observed here, four described by Codex.
 
-**Le CLAIM est tranche** : la seule reservation est
-`.duo/claims/<agent>.md`. Le champ `fichiers:` d un message est une trace
-descriptive de ce qui a ete touche, **il ne reserve rien**. Raison donnee par
-Codex, et elle est bonne : une reservation est un etat courant, qui se consulte,
-se remplace, expire et se libere ; le journal, lui, est immuable. Deux sources
-divergent toujours.
+- **Quota.** "You ve hit your usage limit... try again at HH:MM". Observed
+  twice. Temporary failure: continue alone, resume later, do not loop.
+- **Empty output.** Dead session; the `-o` file is zero bytes. `duo.sh`
+  treats this as a failure.
+- **Very long messages.** It loses the middle. Beyond one page, write to a
+  repository file and give its path.
+- **Session timeout:** there is no universal duration to encode. Limits come
+  from the host, tools, and calling process.
+- **Context:** depends on the model; long conversations compact automatically.
+  **Do not put a fixed size in the protocol.**
+- **Quota:** depends on account and model, available through `/status`, and
+  not stable. Observed twice while developing this skill.
+- **Sandbox and approvals:** imposed by the session, not a general rule.
+  Printed in the run header (`approval:`, `sandbox:`). Observed here:
+  `workspace-write [workdir, /tmp, $TMPDIR]`, approval `never`.
+- **Writing outside allowed roots:** impossible. **Permission written in a
+  prompt does not make a read-only mount writable.** During this review,
+  Codex was instructed to edit `.agents/skills/` and was denied access.
+  If the other agent must write somewhere, verify the root permits it;
+  do not take its word for it.
 
-**Ce qui reste ouvert :** rien de bloquant. La regle a retenir est que cette
-fiche vieillit. Une capacite lue ici est une hypothese, celle declaree au
-bonjour est un fait.
+---
+
+## Review status
+
+**Reviewed by Codex on 2026-09-02**, using `codex-cli 0.152.0`. It found twelve
+false or overly absolute claims in this note. All were corrected above after
+checking what could be verified here: PATH, `resume --help` output, the run
+header, and the location of `openai.yaml` in OpenAI's bundled skills.
+
+**The CLAIM question is settled:** the only reservation is
+`.duo/claims/<agent>.md`. A message's `fichiers:` field is a descriptive record
+of touched files; **it reserves nothing**. Codex's sound reasoning: a
+reservation is current state that can be inspected, replaced, expired, and
+released; the journal is immutable. Two sources always diverge.
+
+**Still open:** nothing blocking. Remember that this note ages. A capability
+listed here is a hypothesis; one declared during the handshake is a fact.

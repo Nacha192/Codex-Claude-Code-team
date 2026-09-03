@@ -10,7 +10,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 SHELL = shutil.which('pwsh') or shutil.which('powershell')
 
-@unittest.skipUnless(SHELL, 'PowerShell absent')
+@unittest.skipUnless(SHELL, 'PowerShell is not available')
 class WaitTests(unittest.TestCase):
     def test_continuously_rewritten_file_times_out(self):
         with tempfile.TemporaryDirectory() as temp:
