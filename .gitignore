@@ -1,3 +1,4 @@
+# Keep local agent exchanges and Python cache files out of Git.
 .duo/
 __pycache__/
 *.pyc
