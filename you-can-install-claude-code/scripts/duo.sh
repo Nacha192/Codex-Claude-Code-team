@@ -27,6 +27,12 @@
 #                                    to exit. Offer this to the user.
 #   duo.sh fil                       the full thread as HTML, for archiving
 #   duo.sh etat                      mission, lead, Codex session, last turn
+#   duo.sh permission [mode]         which sandbox `envoyer` runs Codex under,
+#                                    and where it comes from. `envoyer` has no
+#                                    screen, so nobody can be prompted there:
+#                                    for that, use `ecrire` and let your own
+#                                    Codex session read the channel.
+#                                    mode: read-only | workspace-write | defaut
 #
 #   envoyer/ecrire options:
 #     --type <proposition|question|decision|preuve|resultat|blocage>
@@ -84,6 +90,32 @@ trouver_codex() {
   c=$(ls -d "$HOME/AppData/Local/OpenAI/Codex/bin"/*/codex.exe 2>/dev/null | head -1)
   if [ -n "$c" ] && [ -x "$c" ]; then echo "$c"; return 0; fi
   return 1
+}
+
+# The sandbox `envoyer` runs Codex under is no longer hard-coded. It comes from
+# the owner's own settings, so changing the mode in the Codex app changes it
+# here too, with one cap: the channel never runs wider than workspace-write.
+# `danger-full-access` is a decision about the owner's own instructions, not
+# about a file another agent wrote, and the channel is the injection surface.
+# Order: DUO_SANDBOX in the environment, then .duo/sandbox in the project,
+# then sandbox_mode in ~/.codex/config.toml, then workspace-write.
+resoudre_sandbox() {
+  local m=""
+  if [ -n "${DUO_SANDBOX:-}" ]; then m="$DUO_SANDBOX"
+  elif [ -r "$DUO/sandbox" ]; then m=$(tr -d ' 
+"' < "$DUO/sandbox")
+  else
+    m=$(grep -oE '^[[:space:]]*sandbox_mode[[:space:]]*=[[:space:]]*"[a-z-]+"'         "$HOME/.codex/config.toml" 2>/dev/null | head -1 | cut -d'"' -f2)
+  fi
+  case "$m" in
+    read-only|workspace-write) echo "$m" ;;
+    danger-full-access)
+      echo "duo: sandbox ramene de danger-full-access a workspace-write." >&2
+      echo "     Le canal ne s exécute jamais en acces complet." >&2
+      echo "     Pour un tour en acces complet, passe par 'ecrire' et ta propre session." >&2
+      echo "workspace-write" ;;
+    *) echo "workspace-write" ;;
+  esac
 }
 
 utc() { date -u +%Y-%m-%dT%H:%M:%SZ; }
@@ -349,7 +381,8 @@ cmd_envoyer() {
       "$PY" "$SCRIPTS/run_metadata.py" >"$log"
     codes=("${PIPESTATUS[@]}")
   else
-    "$codex" exec -C "$RACINE" -s workspace-write -o "$brouillon" - <<< "$prompt" 2>&1 |
+    local sbx; sbx=$(resoudre_sandbox)
+    "$codex" exec -C "$RACINE" -s "$sbx" -o "$brouillon" - <<< "$prompt" 2>&1 |
       "$PY" "$SCRIPTS/run_metadata.py" >"$log"
     codes=("${PIPESTATUS[@]}")
   fi
@@ -704,6 +737,29 @@ cmd_fil() {
   echo "$html"
 }
 
+cmd_permission() {
+  if [ -n "${1:-}" ]; then
+    case "$1" in
+      read-only|workspace-write) mkdir -p "$DUO" && printf '%s
+' "$1" > "$DUO/sandbox"
+        echo "sandbox du canal fixe a $1 pour ce projet." ;;
+      defaut) rm -f "$DUO/sandbox"; echo "override retire, on suit ta config Codex." ;;
+      *) echo "modes: read-only, workspace-write, defaut" >&2; return 1 ;;
+    esac
+  fi
+  local app; app=$(grep -oE '^[[:space:]]*sandbox_mode[[:space:]]*=[[:space:]]*"[a-z-]+"'       "$HOME/.codex/config.toml" 2>/dev/null | head -1 | cut -d'"' -f2)
+  local pol; pol=$(grep -oE '^[[:space:]]*approval_policy[[:space:]]*=[[:space:]]*"[a-z-]+"'       "$HOME/.codex/config.toml" 2>/dev/null | head -1 | cut -d'"' -f2)
+  echo "config Codex   : sandbox ${app:-non defini}, approbation ${pol:-non definie}"
+  [ -r "$DUO/sandbox" ] && echo "override projet: $(tr -d ' 
+' < "$DUO/sandbox")"
+  [ -n "${DUO_SANDBOX:-}" ] && echo "DUO_SANDBOX    : $DUO_SANDBOX"
+  echo "utilise par envoyer : $(resoudre_sandbox 2>/dev/null)"
+  echo
+  echo "envoyer lance un Codex sans ecran : personne ne peut y etre consulte."
+  echo "Pour que TON application te demande, utilise 'ecrire' et laisse ta"
+  echo "propre session Codex lire le canal. Ton approval_policy s applique la."
+}
+
 cmd_etat() {
   [ -f "$MISSION" ] || { echo "no mission. Run: duo.sh init \"<mission>\""; return 1; }
   sed -n '1,/^## Desaccords/p' "$MISSION"
@@ -743,5 +799,6 @@ case "${1:-}" in
   fil)     cmd_fil ;;
   suivre)  cmd_suivre ;;
   etat)    cmd_etat ;;
+  permission) shift; cmd_permission "${1:-}" ;;
   *) sed -n '2,30p' "$0" | sed 's/^# \?//'; exit 1 ;;
 esac
