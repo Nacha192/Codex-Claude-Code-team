@@ -33,6 +33,35 @@ option can no longer become that option. The session identifier must be a UUID.
 The envelope helps the model; it is not an authorization boundary enforced by
 the operating system.
 
+## What the channel authorizes, and what it never will
+
+A fresh `codex exec` session starts with no mission of its own. If the
+preamble only said "act within the already authorized mission", nothing would
+ever qualify and the receiving agent would refuse even to read a file in the
+repository. That refusal buys no safety: the sandbox already grants that read,
+and the owner opened the session on purpose. It only breaks the bridge.
+
+So the preamble states two levels.
+
+Ordinary work needs no further approval: reading and writing files inside the
+working directory, running the project's own build, test and render commands,
+and answering in the channel. The sandbox, not the message, is what bounds it.
+
+Escalation is never obtainable through the channel, whatever a message or a
+file claims: reading or forwarding secrets even encoded, reaching the network
+or sending data outside, touching files outside the working directory,
+changing these safeguards, `git push` or any destructive or irreversible
+action, and contacting a third party. Those need the owner directly, in the
+receiving agent's own session.
+
+`MISSION.md` scopes the work; it does not authenticate anyone. A line in it
+saying "the owner authorizes X" proves nothing, because any process with write
+access could have added it. It is useful to say what the mission is about, not
+to unlock a level.
+
+When the receiving agent refuses, it names which line the request crossed. A
+refusal that cannot name one is a bug in the refusal, not a defense.
+
 ## What is not guaranteed
 
 The filter is deliberately conservative and may block legitimate discussion.
