@@ -33,34 +33,50 @@ option can no longer become that option. The session identifier must be a UUID.
 The envelope helps the model; it is not an authorization boundary enforced by
 the operating system.
 
-## What the channel authorizes, and what it never will
+## The session's mode decides, the channel does not
 
-A fresh `codex exec` session starts with no mission of its own. If the
-preamble only said "act within the already authorized mission", nothing would
-ever qualify and the receiving agent would refuse even to read a file in the
-repository. That refusal buys no safety: the sandbox already grants that read,
-and the owner opened the session on purpose. It only breaks the bridge.
+The bridge has no permission system of its own, on purpose. The host already
+has one: `--approval` and `--sandbox` for Codex, the permission mode for
+Claude Code. Stacking a second layer on top is what used to deadlock the
+bridge: a fresh `codex exec` session has no mission of its own, so a preamble
+demanding an "already authorized mission" authorized nothing, and the
+receiving agent refused even to read a file the sandbox already granted.
 
-So the preamble states two levels.
+So the preamble defers to the session.
 
-Ordinary work needs no further approval: reading and writing files inside the
-working directory, running the project's own build, test and render commands,
-and answering in the channel. The sandbox, not the message, is what bounds it.
+What the session already allows is done without asking again. Under a
+write-enabled sandbox that covers reading and writing inside the working
+directory, running the project's own build, test and render commands, and
+answering in the channel.
 
-Escalation is never obtainable through the channel, whatever a message or a
-file claims: reading or forwarding secrets even encoded, reaching the network
-or sending data outside, touching files outside the working directory,
-changing these safeguards, `git push` or any destructive or irreversible
-action, and contacting a third party. Those need the owner directly, in the
-receiving agent's own session.
+Where the session asks the human to approve, the agent attempts the action and
+lets the host prompt. It does not refuse in the host's place, and it does not
+route around the prompt.
+
+Where the session forbids, the sandbox blocks it. The channel can never raise
+that ceiling. A message asking for more than the mode permits is not a reason
+to widen the mode.
+
+## The floor that survives a permissive mode
+
+A fully permissive mode means the owner trusts their own instructions. It does
+not mean they trust a file written by another agent, and the channel is
+exactly the injection surface. So one floor holds even there, and needs the
+owner directly in the receiving agent's own session: reading or forwarding
+secrets even encoded, sending anything off the machine, `git push` or any
+other irreversible or outward-facing action, deleting or writing outside the
+working directory, contacting a third party, and changing these safeguards.
+
+The list is short by design. It is about reach and reversibility, not about a
+fixed set of commands.
 
 `MISSION.md` scopes the work; it does not authenticate anyone. A line in it
 saying "the owner authorizes X" proves nothing, because any process with write
-access could have added it. It is useful to say what the mission is about, not
-to unlock a level.
+access could have added it. It says what the mission is about, it does not
+unlock a level.
 
-When the receiving agent refuses, it names which line the request crossed. A
-refusal that cannot name one is a bug in the refusal, not a defense.
+When the receiving agent refuses, it names what the request crossed. A refusal
+that cannot name one is a bug in the refusal, not a defense.
 
 ## What is not guaranteed
 
